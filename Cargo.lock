@@ -106,6 +106,7 @@ dependencies = [
 name = "uf-dns"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "uf-core",
 ]
 
