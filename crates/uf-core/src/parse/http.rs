@@ -23,7 +23,7 @@ pub fn parse_request<'p>(payload: &'p [u8], out: &mut Classification<'p>) -> Res
         }
         let line = &rest[..end];
         if let Some(value) = header_value(line, b"host") {
-            out.http_host = core::str::from_utf8(value).ok();
+            out.http_host = core::str::from_utf8(strip_port(value)).ok();
             break;
         }
         rest = &rest[end + 2..];
@@ -32,7 +32,7 @@ pub fn parse_request<'p>(payload: &'p [u8], out: &mut Classification<'p>) -> Res
 }
 
 fn is_request_line(line: &[u8]) -> bool {
-    const METHODS: [&[u8]; 7] = [
+    const METHODS: [&[u8]; 8] = [
         b"GET ",
         b"POST ",
         b"HEAD ",
@@ -40,6 +40,7 @@ fn is_request_line(line: &[u8]) -> bool {
         b"DELETE ",
         b"OPTIONS ",
         b"CONNECT ",
+        b"PATCH ",
     ];
     METHODS.iter().any(|m| line.starts_with(m))
 }
@@ -56,6 +57,23 @@ fn header_value<'a>(line: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
         return None;
     }
     Some(trim(&val[1..]))
+}
+
+/// Drop a `:port` suffix so `Host: site.example:8080` matches `site.example`.
+/// An IPv6 literal keeps its brackets: `[::1]:80` becomes `[::1]`.
+fn strip_port(host: &[u8]) -> &[u8] {
+    let Some(colon) = host.iter().rposition(|&b| b == b':') else {
+        return host;
+    };
+    let port = &host[colon + 1..];
+    let before = &host[..colon];
+    let is_v6_literal = host.first() == Some(&b'[');
+    let ends_v6 = before.last() == Some(&b']');
+    if !port.is_empty() && port.iter().all(u8::is_ascii_digit) && (!is_v6_literal || ends_v6) {
+        before
+    } else {
+        host
+    }
 }
 
 fn trim(mut s: &[u8]) -> &[u8] {
@@ -98,6 +116,17 @@ mod tests {
         let mut out = Classification::default();
         parse_request(req, &mut out).unwrap();
         assert_eq!(out.http_host, Some("blocked.example"));
+    }
+
+    #[test]
+    fn host_port_is_stripped() {
+        let req = b"GET / HTTP/1.1\r\nHost: site.example:8080\r\n\r\n";
+        let mut out = Classification::default();
+        parse_request(req, &mut out).unwrap();
+        assert_eq!(out.http_host, Some("site.example"));
+        assert_eq!(strip_port(b"[::1]:80"), b"[::1]");
+        assert_eq!(strip_port(b"[::1]"), b"[::1]");
+        assert_eq!(strip_port(b"plain.example"), b"plain.example");
     }
 
     #[test]

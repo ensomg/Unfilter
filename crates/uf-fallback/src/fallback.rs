@@ -76,6 +76,14 @@ pub trait Handshake {
 
     /// Whether the handshake has completed successfully.
     fn established(&self) -> bool;
+
+    /// Bytes the upstream sent after its handshake reply, in the same read.
+    /// They already belong to the tunnelled stream, so the relay must deliver
+    /// them to the client before anything it reads next. Empty until the
+    /// handshake is established; drained by the call.
+    fn take_leftover(&mut self) -> Vec<u8> {
+        Vec::new()
+    }
 }
 
 /// An upstream that can carry a connection to a target.

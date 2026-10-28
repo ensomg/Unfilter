@@ -21,7 +21,27 @@ pub fn authority(target: &Target) -> String {
 }
 
 /// Build a `CONNECT` request for `target`, optionally with Basic proxy auth.
-pub fn encode_request(target: &Target, auth: Option<&UserPass>) -> Vec<u8> {
+/// Largest proxy reply header we buffer before giving up on the proxy.
+const MAX_REPLY_HEADER: usize = 16 * 1024;
+
+/// Whether a value may be placed in a request line or header: no CR/LF (which
+/// would let a crafted host or credential inject headers) and no other control
+/// bytes.
+fn header_safe(s: &str) -> bool {
+    !s.bytes().any(|b| b.is_ascii_control())
+}
+
+pub fn encode_request(target: &Target, auth: Option<&UserPass>) -> Result<Vec<u8>> {
+    if let TargetAddr::Domain(name) = &target.addr {
+        if name.is_empty() || name.contains(' ') || !header_safe(name) {
+            return Err(FallbackError::Malformed);
+        }
+    }
+    if let Some(a) = auth {
+        if !header_safe(&a.username) || !header_safe(&a.password) {
+            return Err(FallbackError::Malformed);
+        }
+    }
     let authority = authority(target);
     let mut req = format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n");
     if let Some(a) = auth {
@@ -29,7 +49,7 @@ pub fn encode_request(target: &Target, auth: Option<&UserPass>) -> Vec<u8> {
         req.push_str(&format!("Proxy-Authorization: Basic {token}\r\n"));
     }
     req.push_str("\r\n");
-    req.into_bytes()
+    Ok(req.into_bytes())
 }
 
 /// A parsed CONNECT status reply.
@@ -48,6 +68,7 @@ pub struct ConnectStatus {
 pub fn parse_response(buf: &[u8]) -> Result<ConnectStatus> {
     let end = match find_header_end(buf) {
         Some(e) => e,
+        None if buf.len() > MAX_REPLY_HEADER => return Err(FallbackError::Malformed),
         None => return Err(FallbackError::Truncated),
     };
     // Status line is the first line, terminated by the first CRLF.
@@ -135,7 +156,7 @@ impl Handshake for HttpConnectHandshake {
             return Ok(HandshakeStep::send(encode_request(
                 &self.target,
                 self.auth.as_ref(),
-            )));
+            )?));
         }
         self.rx.extend_from_slice(from_upstream);
         match parse_response(&self.rx) {
@@ -152,6 +173,14 @@ impl Handshake for HttpConnectHandshake {
 
     fn established(&self) -> bool {
         self.done
+    }
+
+    fn take_leftover(&mut self) -> Vec<u8> {
+        if self.done {
+            std::mem::take(&mut self.rx)
+        } else {
+            Vec::new()
+        }
     }
 }
 
@@ -214,7 +243,7 @@ mod tests {
 
     #[test]
     fn request_without_auth() {
-        let req = encode_request(&Target::domain("blocked.example", 443), None);
+        let req = encode_request(&Target::domain("blocked.example", 443), None).unwrap();
         assert_eq!(
             req,
             b"CONNECT blocked.example:443 HTTP/1.1\r\nHost: blocked.example:443\r\n\r\n"
@@ -227,7 +256,7 @@ mod tests {
             username: "user".into(),
             password: "pass".into(),
         };
-        let req = encode_request(&Target::domain("x.example", 443), Some(&auth));
+        let req = encode_request(&Target::domain("x.example", 443), Some(&auth)).unwrap();
         let text = String::from_utf8(req).unwrap();
         assert!(text.contains("Proxy-Authorization: Basic dXNlcjpwYXNz\r\n"));
         assert!(text.ends_with("\r\n\r\n"));
@@ -330,5 +359,34 @@ mod tests {
         assert_eq!(u.kind(), FallbackKind::HttpConnect);
         let mut hs = u.connect(&Target::domain("x.example", 443)).unwrap();
         assert!(hs.pump(&[]).unwrap().send.starts_with(b"CONNECT"));
+    }
+
+    #[test]
+    fn crlf_in_host_or_credentials_is_rejected() {
+        let evil = Target::domain("a.example\r\nX-Evil: 1", 443);
+        assert_eq!(encode_request(&evil, None), Err(FallbackError::Malformed));
+        let auth = UserPass {
+            username: "u\r\nX: y".into(),
+            password: "p".into(),
+        };
+        assert_eq!(
+            encode_request(&Target::domain("a.example", 443), Some(&auth)),
+            Err(FallbackError::Malformed)
+        );
+    }
+
+    #[test]
+    fn oversized_reply_header_is_rejected() {
+        let junk = vec![b'a'; MAX_REPLY_HEADER + 1];
+        assert_eq!(parse_response(&junk), Err(FallbackError::Malformed));
+    }
+
+    #[test]
+    fn leftover_after_200_is_handed_over() {
+        let mut hs = HttpConnectHandshake::new(Target::domain("x.example", 443), None);
+        hs.pump(&[]).unwrap();
+        let reply = b"HTTP/1.1 200 OK\r\n\r\n\x16\x03";
+        assert!(hs.pump(reply).unwrap().established);
+        assert_eq!(hs.take_leftover(), vec![0x16, 0x03]);
     }
 }

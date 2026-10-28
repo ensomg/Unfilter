@@ -13,7 +13,10 @@ pub mod ffi;
 
 use core::fmt;
 
-use ffi::{Address, Api, ERROR_NO_DATA, Handle, LoadError};
+use ffi::{
+    Address, Api, ERROR_INVALID_HANDLE, ERROR_NO_DATA, ERROR_OPERATION_ABORTED, Handle, LoadError,
+    MTU_MAX,
+};
 use uf_core::error::{Error, Result};
 use uf_core::io::{Direction, PacketBuf, PacketIO, PacketMeta};
 
@@ -52,7 +55,14 @@ impl std::error::Error for WinDivertError {}
 pub struct WinDivert {
     api: Api,
     handle: Handle,
-    closed: bool,
+    /// Owns the handle's lifetime; `Drop` closes through it.
+    token: ShutdownToken,
+    /// Receive buffer sized for the largest packet WinDivert can deliver. A
+    /// smaller buffer would make the driver swallow oversized (LSO) segments,
+    /// which breaks fail-open for large uploads.
+    rx: Box<[u8]>,
+    /// Scratch copy used to recompute checksums before injecting.
+    tx: Box<[u8]>,
 }
 
 impl WinDivert {
@@ -69,17 +79,21 @@ impl WinDivert {
         // SAFETY: a freshly loaded API; `open` validates the handle and reports
         // the OS error code on failure.
         let handle = unsafe { api.open(filter, priority, 0) }.map_err(WinDivertError::Open)?;
+        // SAFETY: `handle` was just opened and is closed only via this token.
+        let token = unsafe { api.token(handle) };
         Ok(WinDivert {
             api,
             handle,
-            closed: false,
+            token,
+            rx: vec![0u8; MTU_MAX].into_boxed_slice(),
+            tx: vec![0u8; MTU_MAX].into_boxed_slice(),
         })
     }
 
     /// A token the fail-open watchdog can use to shut this handle down from
     /// another thread.
     pub fn shutdown_token(&self) -> ShutdownToken {
-        self.api.token(self.handle)
+        self.token.clone()
     }
 
     fn meta_from(addr: &Address, captured_at_nanos: u64) -> PacketMeta {
@@ -94,9 +108,11 @@ impl WinDivert {
             loopback: addr.loopback(),
             impostor: addr.impostor(),
             ipv6: addr.ipv6(),
-            // As captured the checksums are valid; we only clear this if we
-            // later mutate the packet.
-            checksums_valid: true,
+            // With checksum offload an outbound packet is captured before the
+            // NIC fills its checksums, and the driver says so via these bits.
+            // Claiming "valid" on re-inject would put a bad checksum on the
+            // wire, so report what was captured; `send` recomputes otherwise.
+            checksums_valid: checksums_valid(addr),
             captured_at_nanos,
         }
     }
@@ -115,50 +131,66 @@ impl WinDivert {
     }
 }
 
+/// Whether every checksum the packet carries was valid as captured. IPv6 has
+/// no header checksum; a packet is TCP or UDP, so one transport bit suffices.
+fn checksums_valid(addr: &Address) -> bool {
+    (addr.ipv6() || addr.ip_checksum()) && (addr.tcp_checksum() || addr.udp_checksum())
+}
+
 impl PacketIO for WinDivert {
     fn recv(&mut self, buf: &mut PacketBuf) -> Result<PacketMeta> {
-        let region = buf.backing_mut();
-        // SAFETY: `self.handle` is open until `close`/`Drop`; `region` is a
-        // writable buffer of MAX_PACKET bytes for WinDivert to fill.
-        match unsafe { self.api.recv(self.handle, region) } {
-            Ok((len, addr)) => {
-                buf.set_len(len as usize);
-                Ok(Self::meta_from(&addr, 0))
+        loop {
+            // SAFETY: `self.handle` is open until `Drop`; `self.rx` is a
+            // writable buffer of MTU_MAX bytes for WinDivert to fill.
+            let (len, addr) = match unsafe { self.api.recv(self.handle, &mut self.rx) } {
+                Ok(got) => got,
+                Err(ERROR_NO_DATA | ERROR_INVALID_HANDLE | ERROR_OPERATION_ABORTED) => {
+                    return Err(Error::Shutdown);
+                }
+                Err(code) => return Err(Error::Io(code)),
+            };
+            let pkt = self.rx.get(..len as usize).ok_or(Error::OutOfBounds)?;
+            if buf.set(pkt).is_ok() {
+                return Ok(Self::meta_from(&addr, 0));
             }
-            Err(ERROR_NO_DATA) => Err(Error::Shutdown),
-            Err(code) => Err(Error::Io(code)),
+            // Larger than the engine's buffers (an LSO super-segment or jumbo
+            // frame): never ours to rewrite. Re-inject it verbatim with its
+            // original address and wait for the next packet (fail-open).
+            // SAFETY: `self.handle` is open; `pkt` and `addr` are exactly what
+            // the driver just handed us.
+            let _ = unsafe { self.api.send(self.handle, pkt, &addr) };
         }
     }
 
     fn send(&mut self, pkt: &[u8], meta: &PacketMeta) -> Result<()> {
-        let addr = Self::addr_from(meta);
-        // SAFETY: `self.handle` is open; `pkt` is a valid read-only slice; the
+        let mut addr = Self::addr_from(meta);
+        let out: &[u8] = if meta.checksums_valid {
+            pkt
+        } else {
+            let tx = self.tx.get_mut(..pkt.len()).ok_or(Error::Capacity)?;
+            tx.copy_from_slice(pkt);
+            if self.api.calc_checksums(tx, &mut addr) {
+                addr.set_checksums_valid(true);
+            }
+            tx
+        };
+        // SAFETY: `self.handle` is open; `out` is a valid read-only slice; the
         // address was built to match it.
-        match unsafe { self.api.send(self.handle, pkt, &addr) } {
+        match unsafe { self.api.send(self.handle, out, &addr) } {
             Ok(_) => Ok(()),
             Err(code) => Err(Error::Io(code)),
         }
     }
 
     fn shutdown(&mut self) {
-        if !self.closed {
-            // SAFETY: `self.handle` is still open here.
-            unsafe { self.api.shutdown(self.handle) };
-        }
+        self.token.trigger();
     }
 }
 
 impl Drop for WinDivert {
     fn drop(&mut self) {
-        if !self.closed {
-            self.closed = true;
-            // SAFETY: `self.handle` is open and used nowhere after these calls.
-            // Shutting down then closing removes the driver filter (fail-open).
-            unsafe {
-                self.api.shutdown(self.handle);
-                self.api.close(self.handle);
-            }
-        }
+        // Shutting down then closing removes the driver filter (fail-open).
+        self.token.close();
     }
 }
 
@@ -185,6 +217,17 @@ mod tests {
         assert!(!a.ipv6());
         assert_eq!(a.if_idx(), 12);
         assert_eq!(a.sub_if_idx(), 3);
+    }
+
+    #[test]
+    fn checksum_bits_drive_meta() {
+        let mut a = Address::zeroed();
+        a.set_flags(true, false, false, false);
+        // Offloaded capture: no checksum bit set -> must be recomputed.
+        assert!(!WinDivert::meta_from(&a, 0).checksums_valid);
+        a.set_checksums_valid(true);
+        assert!(a.ip_checksum() && a.tcp_checksum() && a.udp_checksum());
+        assert!(WinDivert::meta_from(&a, 0).checksums_valid);
     }
 
     #[test]

@@ -92,7 +92,14 @@ impl ProfileCache {
         let json = self
             .to_json()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        std::fs::write(path, json)
+        // Write a sibling file and rename it over the old one, so a crash or
+        // power loss mid-write never leaves a truncated cache (which `load`
+        // would silently replace with an empty one, losing every profile).
+        let mut tmp = path.as_os_str().to_owned();
+        tmp.push(".tmp");
+        let tmp = std::path::PathBuf::from(tmp);
+        std::fs::write(&tmp, json)?;
+        std::fs::rename(&tmp, path)
     }
 }
 

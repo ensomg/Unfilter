@@ -7,6 +7,7 @@
 
 use core::ffi::{c_char, c_void};
 use std::ffi::CString;
+use std::sync::{Arc, Mutex};
 
 use windows_sys::Win32::Foundation::{FreeLibrary, GetLastError, HMODULE};
 use windows_sys::Win32::System::LibraryLoader::{
@@ -26,6 +27,16 @@ pub const SHUTDOWN_BOTH: u32 = 3;
 pub const ERROR_NO_DATA: u32 = 232;
 /// `ERROR_INSUFFICIENT_BUFFER` — packet larger than the supplied buffer.
 pub const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
+/// `ERROR_INVALID_HANDLE` — the handle was closed underneath a `recv`.
+pub const ERROR_INVALID_HANDLE: u32 = 6;
+/// `ERROR_OPERATION_ABORTED` — a pending `recv` was cancelled.
+pub const ERROR_OPERATION_ABORTED: u32 = 995;
+
+/// `WINDIVERT_MTU_MAX`: the largest packet WinDivert can hand us (IPv6 header
+/// plus a 64 KiB payload). Outbound segments can be this large when the NIC
+/// does large-send offload, so the receive buffer must be this big or such a
+/// packet is lost inside the driver.
+pub const MTU_MAX: usize = 40 + 0xFFFF;
 
 /// `WINDIVERT_ADDRESS`, 80 bytes (WinDivert 2.2). The bit-field word and the
 /// per-layer union are kept as raw fields and decoded by accessor helpers so the
@@ -108,6 +119,21 @@ impl Address {
         self.set_bit(BIT_UDPCHECKSUM, valid);
     }
 
+    /// The captured IPv4 header checksum is valid (always clear for IPv6).
+    pub fn ip_checksum(&self) -> bool {
+        self.get_bit(BIT_IPCHECKSUM)
+    }
+
+    /// The captured TCP checksum is valid.
+    pub fn tcp_checksum(&self) -> bool {
+        self.get_bit(BIT_TCPCHECKSUM)
+    }
+
+    /// The captured UDP checksum is valid.
+    pub fn udp_checksum(&self) -> bool {
+        self.get_bit(BIT_UDPCHECKSUM)
+    }
+
     /// Network-layer interface index.
     pub fn if_idx(&self) -> u32 {
         u32::from_ne_bytes([
@@ -143,15 +169,38 @@ type FnRecv = unsafe extern "system" fn(Handle, *mut u8, u32, *mut u32, *mut Add
 type FnSend = unsafe extern "system" fn(Handle, *const u8, u32, *mut u32, *const Address) -> i32;
 type FnShutdown = unsafe extern "system" fn(Handle, u32) -> i32;
 type FnClose = unsafe extern "system" fn(Handle) -> i32;
+type FnCalcChecksums = unsafe extern "system" fn(*mut c_void, u32, *mut Address, u64) -> i32;
+
+/// The loaded `WinDivert.dll`. Freed when the last [`Api`] or
+/// [`ShutdownToken`] referring to it is dropped, so no resolved entry point can
+/// outlive the code it points into.
+struct Module(HMODULE);
+
+// SAFETY: an `HMODULE` is a process-wide value, and `FreeLibrary` may be called
+// from any thread.
+unsafe impl Send for Module {}
+// SAFETY: as above; the module is never mutated through a shared reference.
+unsafe impl Sync for Module {}
+
+impl Drop for Module {
+    fn drop(&mut self) {
+        // SAFETY: the module came from `LoadLibraryExW` and is freed exactly
+        // once, here, after every holder of a resolved pointer is gone.
+        unsafe {
+            FreeLibrary(self.0);
+        }
+    }
+}
 
 /// Resolved WinDivert entry points plus the module they came from.
 pub struct Api {
-    module: HMODULE,
+    module: Arc<Module>,
     open: FnOpen,
     recv: FnRecv,
     send: FnSend,
     shutdown: FnShutdown,
     close: FnClose,
+    calc_checksums: FnCalcChecksums,
 }
 
 /// Why loading WinDivert failed.
@@ -185,6 +234,10 @@ impl Api {
             // SAFETY: querying the thread's last-error is always sound.
             return Err(LoadError::LibraryNotFound(unsafe { GetLastError() }));
         }
+        // Owned from here on: a missing symbol below frees the library instead
+        // of leaking it.
+        let module = Arc::new(Module(module));
+        let raw = module.0;
 
         // SAFETY: `module` is a live library handle; each name is a valid
         // NUL-terminated C string. `GetProcAddress` returns `None`/null for a
@@ -192,27 +245,31 @@ impl Api {
         // matches each documented WinDivert 2.2 signature.
         let api = unsafe {
             Api {
-                module,
                 open: core::mem::transmute::<*const c_void, FnOpen>(resolve(
-                    module,
+                    raw,
                     c"WinDivertOpen",
                 )?),
                 recv: core::mem::transmute::<*const c_void, FnRecv>(resolve(
-                    module,
+                    raw,
                     c"WinDivertRecv",
                 )?),
                 send: core::mem::transmute::<*const c_void, FnSend>(resolve(
-                    module,
+                    raw,
                     c"WinDivertSend",
                 )?),
                 shutdown: core::mem::transmute::<*const c_void, FnShutdown>(resolve(
-                    module,
+                    raw,
                     c"WinDivertShutdown",
                 )?),
                 close: core::mem::transmute::<*const c_void, FnClose>(resolve(
-                    module,
+                    raw,
                     c"WinDivertClose",
                 )?),
+                calc_checksums: core::mem::transmute::<*const c_void, FnCalcChecksums>(resolve(
+                    raw,
+                    c"WinDivertHelperCalcChecksums",
+                )?),
+                module,
             }
         };
         Ok(api)
@@ -285,63 +342,83 @@ impl Api {
         }
     }
 
-    /// Shut down both directions of a handle (unblocks a pending `recv`).
-    ///
-    /// # Safety
-    /// `handle` must be an open WinDivert handle.
-    pub unsafe fn shutdown(&self, handle: Handle) {
-        // SAFETY: `handle` is an open handle; the call only transitions it to
-        // the shutdown state and cannot violate memory safety.
-        unsafe { (self.shutdown)(handle, SHUTDOWN_BOTH) };
+    /// Recompute the IP/TCP/UDP checksums of `pkt` in place and mark them
+    /// valid in `addr`. Returns `false` if the packet could not be parsed.
+    pub fn calc_checksums(&self, pkt: &mut [u8], addr: &mut Address) -> bool {
+        // SAFETY: `pkt` is a writable region of `pkt.len()` bytes and `addr` a
+        // valid address; the helper only reads and writes inside them.
+        let ok =
+            unsafe { (self.calc_checksums)(pkt.as_mut_ptr().cast(), pkt.len() as u32, addr, 0) };
+        ok != 0
     }
 
-    /// Close a handle.
+    /// Take ownership of an open handle's lifetime. The returned token is the
+    /// only way the handle is ever closed, and it can be cloned to a watchdog
+    /// thread to shut the handle down from there (fail-open).
     ///
     /// # Safety
-    /// `handle` must be an open WinDivert handle not used after this call.
-    pub unsafe fn close(&self, handle: Handle) {
-        // SAFETY: `handle` is an open handle no longer used afterwards.
-        unsafe { (self.close)(handle) };
-    }
-
-    /// A `Send`-able token that can shut this handle down from another thread
-    /// (the fail-open watchdog). Stores the handle as an integer and the
-    /// resolved shutdown entry point, both of which are safe to move.
-    pub fn token(&self, handle: Handle) -> ShutdownToken {
+    /// `handle` must be an open WinDivert handle from [`open`](Api::open) that
+    /// is closed through nothing but the returned token.
+    pub unsafe fn token(&self, handle: Handle) -> ShutdownToken {
         ShutdownToken {
-            handle: handle as usize,
-            shutdown: self.shutdown,
+            inner: Arc::new(TokenState {
+                handle: handle as usize,
+                shutdown: self.shutdown,
+                close: self.close,
+                closed: Mutex::new(false),
+                _module: Arc::clone(&self.module),
+            }),
         }
     }
 }
 
-/// A cross-thread shutdown signal for a WinDivert handle. Copyable and `Send`
-/// (it holds a plain integer and a function pointer), so the watchdog thread can
-/// own one and unblock a pending `recv` to guarantee fail-open.
-#[derive(Clone, Copy)]
-pub struct ShutdownToken {
+struct TokenState {
     handle: usize,
     shutdown: FnShutdown,
+    close: FnClose,
+    /// Set once the handle is closed. Held while shutting down or closing, so
+    /// a watchdog can never touch a handle value the OS may have reused.
+    closed: Mutex<bool>,
+    /// Keeps `WinDivert.dll` loaded for as long as any token can call into it.
+    _module: Arc<Module>,
+}
+
+/// A cross-thread shutdown signal for a WinDivert handle. `Clone + Send`, so
+/// the watchdog thread can own one and unblock a pending `recv` to guarantee
+/// fail-open. Safe to trigger at any time, including after the backend was
+/// dropped: it then does nothing.
+#[derive(Clone)]
+pub struct ShutdownToken {
+    inner: Arc<TokenState>,
 }
 
 impl ShutdownToken {
-    /// Shut the handle down, unblocking any in-flight `recv`.
+    /// Shut the handle down, unblocking any in-flight `recv`. A no-op once the
+    /// handle has been closed.
     pub fn trigger(&self) {
-        // SAFETY: `handle` is the integer form of a WinDivert handle that was
-        // open when this token was created; `shutdown` is the resolved entry
-        // point. Shutting a (possibly already closed) handle down is sound.
-        unsafe {
-            (self.shutdown)(self.handle as Handle, SHUTDOWN_BOTH);
+        let closed = self.inner.closed.lock().unwrap_or_else(|e| e.into_inner());
+        if !*closed {
+            // SAFETY: the handle is still open (checked under the lock, which
+            // `close` also takes) and the DLL is kept loaded by `_module`.
+            unsafe {
+                (self.inner.shutdown)(self.inner.handle as Handle, SHUTDOWN_BOTH);
+            }
         }
     }
-}
 
-impl Drop for Api {
-    fn drop(&mut self) {
-        // SAFETY: `module` was returned by `LoadLibraryExW` and is freed exactly
-        // once here. No resolved pointer is used after this.
-        unsafe {
-            FreeLibrary(self.module);
+    /// Shut down and close the handle. Idempotent; called from the backend's
+    /// `Drop`.
+    pub(super) fn close(&self) {
+        let mut closed = self.inner.closed.lock().unwrap_or_else(|e| e.into_inner());
+        if !*closed {
+            *closed = true;
+            // SAFETY: the handle is open and, with `closed` now set under the
+            // lock, no token will use it again. Shutting down then closing
+            // removes the driver filter (fail-open).
+            unsafe {
+                (self.inner.shutdown)(self.inner.handle as Handle, SHUTDOWN_BOTH);
+                (self.inner.close)(self.inner.handle as Handle);
+            }
         }
     }
 }
@@ -363,6 +440,7 @@ fn leaked(name: &core::ffi::CStr) -> &'static str {
         b"WinDivertSend" => "WinDivertSend",
         b"WinDivertShutdown" => "WinDivertShutdown",
         b"WinDivertClose" => "WinDivertClose",
+        b"WinDivertHelperCalcChecksums" => "WinDivertHelperCalcChecksums",
         _ => "WinDivert<unknown>",
     }
 }

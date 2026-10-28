@@ -39,7 +39,11 @@ impl Cache {
     }
 
     fn key(name: &str, qtype: QType) -> (String, u16) {
-        (name.to_ascii_lowercase(), qtype.code())
+        // "example.com." and "example.com" are the same name.
+        (
+            name.trim_end_matches('.').to_ascii_lowercase(),
+            qtype.code(),
+        )
     }
 
     /// Look up a live entry. Expired entries are removed and reported as a miss.

@@ -27,7 +27,8 @@ impl StrategyScore {
             self.latency_us_ewma = if self.latency_us_ewma == 0 {
                 latency_us
             } else {
-                (self.latency_us_ewma * 3 + latency_us) / 4
+                // u64: `ewma * 3` overflows u32 for latencies above ~23 min.
+                ((self.latency_us_ewma as u64 * 3 + latency_us as u64) / 4) as u32
             };
         }
     }

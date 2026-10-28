@@ -11,6 +11,12 @@ use crate::detect::{PoisonConfig, Verdict, judge_against};
 use crate::message::{self, DnsMessage, QType};
 use std::net::IpAddr;
 
+/// Answers are cached for at most a day, whatever TTL the upstream claims.
+const MAX_CACHE_TTL: u32 = 86_400;
+
+const RCODE_NOERROR: u8 = 0;
+const RCODE_NXDOMAIN: u8 = 3;
+
 /// A secure upstream: send a DNS query (raw wire bytes), get the response bytes.
 /// Implementations connect to a pinned provider IP over TLS (DoH or DoT).
 pub trait Transport {
@@ -106,7 +112,15 @@ impl Resolver {
             let via = self.upstreams[i].name().to_string();
             match result {
                 Ok(bytes) => match message::parse(&bytes) {
-                    Ok(msg) if msg.id == id && msg.is_response => {
+                    // Only NOERROR and NXDOMAIN are answers. SERVFAIL/REFUSED
+                    // mean "this upstream could not help": try the next one
+                    // rather than caching a failure as a negative answer.
+                    Ok(msg)
+                        if msg.id == id
+                            && msg.is_response
+                            && answers_question(&msg, name, qtype)
+                            && matches!(msg.rcode, RCODE_NOERROR | RCODE_NXDOMAIN) =>
+                    {
                         return Ok(self.store_answer(name, qtype, &msg, &via, now));
                     }
                     _ => last_err = ResolveError::AllUpstreamsFailed,
@@ -125,7 +139,9 @@ impl Resolver {
         via: &str,
         now: u64,
     ) -> Resolved {
-        if msg.is_nxdomain() || msg.answers.is_empty() {
+        let addrs = msg.addresses();
+        // A CNAME-only answer carries no address: as unusable as NODATA.
+        if msg.is_nxdomain() || addrs.is_empty() {
             self.cache.put_negative(name, qtype, now);
             return Resolved {
                 addrs: Vec::new(),
@@ -134,8 +150,7 @@ impl Resolver {
                 via: via.to_string(),
             };
         }
-        let addrs = msg.addresses();
-        let ttl = msg.min_ttl().unwrap_or(0);
+        let ttl = msg.min_ttl().unwrap_or(0).min(MAX_CACHE_TTL);
         self.cache
             .put_positive(name, qtype, addrs.clone(), ttl, now);
         Resolved {
@@ -152,6 +167,11 @@ impl Resolver {
     pub fn judge_isp(&self, isp: &DnsMessage, trusted: &DnsMessage) -> Verdict {
         judge_against(isp, trusted, &self.config)
     }
+}
+
+/// Whether `msg` answers the question that was asked (name and type).
+fn answers_question(msg: &DnsMessage, name: &str, qtype: QType) -> bool {
+    msg.qtype == qtype && msg.qname.eq_ignore_ascii_case(name.trim_end_matches('.'))
 }
 
 #[cfg(test)]
@@ -290,6 +310,42 @@ mod tests {
     fn mismatched_id_is_rejected() {
         // Response carries id 999, but the resolver's first query id is 1.
         let resp = a_response(999, "example.com", "1.2.3.4", 60);
+        let mut r = Resolver::new(
+            vec![MockUpstream::ok("mock", resp)],
+            Cache::new(16, 30),
+            PoisonConfig::default(),
+        );
+        assert_eq!(
+            r.resolve("example.com", QType::A, 0),
+            Err(ResolveError::AllUpstreamsFailed)
+        );
+    }
+
+    fn with_rcode(mut resp: Vec<u8>, rcode: u8) -> Vec<u8> {
+        resp[3] = (resp[3] & 0xF0) | rcode;
+        resp
+    }
+
+    #[test]
+    fn servfail_fails_over_instead_of_caching_negative() {
+        let bad = with_rcode(a_response(1, "example.com", "1.2.3.4", 60), 2);
+        let good = a_response(1, "example.com", "5.6.7.8", 60);
+        let mut r = Resolver::new(
+            vec![
+                MockUpstream::ok("servfail", bad),
+                MockUpstream::ok("up", good),
+            ],
+            Cache::new(16, 30),
+            PoisonConfig::default(),
+        );
+        let got = r.resolve("example.com", QType::A, 0).unwrap();
+        assert_eq!(got.via, "up");
+        assert!(!got.negative);
+    }
+
+    #[test]
+    fn answer_for_another_name_is_rejected() {
+        let resp = a_response(1, "other.example", "1.2.3.4", 60);
         let mut r = Resolver::new(
             vec![MockUpstream::ok("mock", resp)],
             Cache::new(16, 30),

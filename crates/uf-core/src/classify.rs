@@ -86,7 +86,11 @@ impl L7Proto {
     }
 
     fn looks_like_http(payload: &[u8]) -> bool {
-        const METHODS: [&[u8]; 6] = [b"GET ", b"POST", b"HEAD", b"PUT ", b"OPTI", b"CONN"];
+        // Must accept every method `parse::http` does, or such a request is
+        // never classified (DELETE/PATCH were silently passed through).
+        const METHODS: [&[u8]; 8] = [
+            b"GET ", b"POST", b"HEAD", b"PUT ", b"DELE", b"OPTI", b"CONN", b"PATC",
+        ];
         METHODS.iter().any(|m| payload.starts_with(m))
     }
 }
@@ -133,6 +137,18 @@ mod tests {
         let c = classify(req, 80);
         assert_eq!(c.proto, Some(L7Proto::Http));
         assert_eq!(c.http_host, Some("site.example"));
+    }
+
+    #[test]
+    fn classify_delete_and_patch() {
+        for req in [
+            &b"DELETE /x HTTP/1.1\r\nHost: a.example\r\n\r\n"[..],
+            &b"PATCH /x HTTP/1.1\r\nHost: a.example\r\n\r\n"[..],
+        ] {
+            let c = classify(req, 80);
+            assert_eq!(c.proto, Some(L7Proto::Http));
+            assert_eq!(c.http_host, Some("a.example"));
+        }
     }
 
     #[test]

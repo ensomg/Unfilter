@@ -173,7 +173,7 @@ pub fn parse_connect_reply(buf: &[u8]) -> Result<ConnectReply> {
             (TargetAddr::Ip(IpAddr::from(o)), 16)
         }
         atyp::DOMAIN => {
-            let dlen = buf[4] as usize;
+            let dlen = *buf.get(4).ok_or(FallbackError::Truncated)? as usize;
             if buf.len() < 5 + dlen {
                 return Err(FallbackError::Truncated);
             }
@@ -298,6 +298,14 @@ impl Handshake for Socks5Handshake {
 
     fn established(&self) -> bool {
         self.state == State::Done
+    }
+
+    fn take_leftover(&mut self) -> Vec<u8> {
+        if self.state == State::Done {
+            std::mem::take(&mut self.rx)
+        } else {
+            Vec::new()
+        }
     }
 }
 
@@ -516,6 +524,33 @@ mod tests {
             assert!(!hs.pump(&[*b]).unwrap().established);
         }
         assert!(hs.pump(&[reply[reply.len() - 1]]).unwrap().established);
+    }
+
+    #[test]
+    fn domain_reply_truncated_at_length_byte_does_not_panic() {
+        assert_eq!(
+            parse_connect_reply(&[0x05, 0x00, 0x00, atyp::DOMAIN]),
+            Err(FallbackError::Truncated)
+        );
+        let mut ok = vec![0x05, 0x00, 0x00, atyp::DOMAIN, 3];
+        ok.extend_from_slice(b"a.b");
+        ok.extend_from_slice(&443u16.to_be_bytes());
+        for n in 0..ok.len() {
+            assert_eq!(parse_connect_reply(&ok[..n]), Err(FallbackError::Truncated));
+        }
+        assert_eq!(parse_connect_reply(&ok).unwrap().len, ok.len());
+    }
+
+    #[test]
+    fn handshake_hands_over_trailing_stream_bytes() {
+        let mut hs = Socks5Handshake::new(Target::domain("x.example", 443), None);
+        hs.pump(&[]).unwrap();
+        hs.pump(&[0x05, 0x00]).unwrap();
+        let mut reply = vec![0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0];
+        reply.extend_from_slice(&[0x16, 0x03, 0x03]);
+        assert!(hs.pump(&reply).unwrap().established);
+        assert_eq!(hs.take_leftover(), vec![0x16, 0x03, 0x03]);
+        assert!(hs.take_leftover().is_empty());
     }
 
     #[test]

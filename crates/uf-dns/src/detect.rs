@@ -54,23 +54,42 @@ impl Default for PoisonConfig {
     }
 }
 
-fn is_sinkhole(ip: IpAddr) -> bool {
+// An IPv4-mapped IPv6 answer (`::ffff:10.0.0.1`) is judged as the IPv4
+// address it carries, so a sinkhole cannot hide behind the mapping.
+fn canonical(ip: IpAddr) -> IpAddr {
     match ip {
+        IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+        v4 => v4,
+    }
+}
+
+fn is_sinkhole(ip: IpAddr) -> bool {
+    match canonical(ip) {
         IpAddr::V4(v4) => v4.is_unspecified() || v4.is_broadcast(),
         IpAddr::V6(v6) => v6.is_unspecified(),
     }
 }
 
 fn is_bogon(ip: IpAddr) -> bool {
-    match ip {
+    match canonical(ip) {
         IpAddr::V4(v4) => {
+            let o = v4.octets();
             v4.is_private()
                 || v4.is_loopback()
                 || v4.is_link_local()
                 || v4.is_documentation()
-                || v4.octets()[0] == 0
+                || v4.is_multicast()
+                || o[0] == 0
+                || o[0] >= 240 // reserved
+                || (o[0] == 100 && (o[1] & 0xC0) == 64) // 100.64.0.0/10 carrier-grade NAT
+                || (o[0] == 198 && (o[1] & 0xFE) == 18) // 198.18.0.0/15 benchmarking
         }
-        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local(),
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
+                || v6.is_multicast()
+        }
     }
 }
 
@@ -139,6 +158,27 @@ mod tests {
     fn private_address_for_public_name_is_bogon() {
         let m = msg_with(&["10.0.0.1"], 300);
         assert_eq!(judge(&m, &PoisonConfig::default()), Verdict::Bogon);
+    }
+
+    #[test]
+    fn reserved_ranges_and_mapped_v4_are_bogons() {
+        for a in ["100.64.0.1", "198.18.0.1", "240.0.0.1", "224.0.0.1"] {
+            assert_eq!(
+                judge(&msg_with(&[a], 300), &PoisonConfig::default()),
+                Verdict::Bogon,
+                "{a}"
+            );
+        }
+        let mapped = DnsMessage {
+            is_response: true,
+            answers: vec![Record {
+                qtype: QType::Aaaa,
+                ttl: 300,
+                addr: Some("::ffff:0.0.0.0".parse().unwrap()),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(judge(&mapped, &PoisonConfig::default()), Verdict::Sinkhole);
     }
 
     #[test]

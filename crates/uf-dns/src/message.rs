@@ -137,9 +137,15 @@ pub fn parse(buf: &[u8]) -> Result<DnsMessage, DnsError> {
     let ancount = u16::from_be_bytes([buf[6], buf[7]]);
 
     let mut pos = 12;
-    let (qname, _) = read_name(buf, &mut pos)?;
-    let qtype = QType::from_code(read_u16(buf, &mut pos)?);
-    let _qclass = read_u16(buf, &mut pos)?;
+    // A response may legally carry no question (e.g. some FORMERR replies).
+    let (qname, qtype) = if qdcount == 0 {
+        (String::new(), QType::default())
+    } else {
+        let (qname, _) = read_name(buf, &mut pos)?;
+        let qtype = QType::from_code(read_u16(buf, &mut pos)?);
+        let _qclass = read_u16(buf, &mut pos)?;
+        (qname, qtype)
+    };
 
     // Skip any extra questions (should be 1, but be defensive).
     for _ in 1..qdcount {
@@ -294,6 +300,15 @@ mod tests {
         m.extend_from_slice(&1u16.to_be_bytes());
         let parsed = parse(&m).unwrap();
         assert!(parsed.is_nxdomain());
+    }
+
+    #[test]
+    fn response_without_question_parses() {
+        let m = vec![0x00, 0x07, 0x81, 0x81, 0, 0, 0, 0, 0, 0, 0, 0];
+        let parsed = parse(&m).unwrap();
+        assert_eq!(parsed.id, 7);
+        assert_eq!(parsed.rcode, 1);
+        assert!(parsed.qname.is_empty());
     }
 
     #[test]
