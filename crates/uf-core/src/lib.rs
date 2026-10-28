@@ -11,10 +11,12 @@
 
 pub mod action;
 pub mod classify;
+pub mod desync;
 pub mod engine;
 pub mod error;
 pub mod flow;
 pub mod io;
+pub mod net;
 pub mod parse;
 pub mod strategy;
 
@@ -23,8 +25,10 @@ pub mod testing;
 
 pub use action::{DesyncAction, FakeKind, Fooling, SplitPos, TtlSpec};
 pub use classify::{Classification, L7Proto, TargetCategory};
+pub use desync::{DataStrategy, DesyncPlan, plan};
 pub use engine::Engine;
 pub use error::{Error, Result};
 pub use flow::{Clock, FlowKey, FlowPhase, FlowTable, Protocol};
 pub use io::{BufferPool, Direction, MAX_PACKET, PacketBuf, PacketIO, PacketMeta};
+pub use net::{Endpoints, TcpLayout, TcpPacket, tcp_endpoints};
 pub use strategy::{Emitter, Strategy, StrategyId, StrategySpec, Verdict};

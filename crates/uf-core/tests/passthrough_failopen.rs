@@ -109,3 +109,82 @@ fn send_failure_fails_open_and_loop_ends() {
     assert_eq!(stats.passed, 0);
     assert_eq!(stats.rewritten, 0);
 }
+
+/// Aktif strateji: akışın ilk veri paketi split+disorder ile yeniden yazılıyor,
+/// enjekte edilen segmentler sıra numarasına göre birleştirilince özgün
+/// yük bit-bit geri geliyor (sunucunun gördüğü akış değişmiyor). Sonraki
+/// paketler ve TCP olmayan trafik aynen geçiyor (fail-open).
+#[test]
+fn active_strategy_rewrites_first_segment_and_preserves_stream() {
+    use uf_core::action::{DesyncAction, SplitPos};
+    use uf_core::{DataStrategy, StrategyId, StrategySpec, TcpPacket};
+
+    // IPv4 TCP paketi kur (20+20 başlık) verilen yük ile.
+    fn v4(seq: u32, payload: &[u8]) -> Vec<u8> {
+        let total = 40 + payload.len();
+        let mut p = vec![0u8; total];
+        p[0] = 0x45;
+        p[2..4].copy_from_slice(&(total as u16).to_be_bytes());
+        p[8] = 64;
+        p[9] = 6; // TCP
+        p[12..16].copy_from_slice(&[192, 168, 1, 2]);
+        p[16..20].copy_from_slice(&[93, 184, 216, 34]);
+        p[20..22].copy_from_slice(&0xC000u16.to_be_bytes());
+        p[22..24].copy_from_slice(&443u16.to_be_bytes());
+        p[24..28].copy_from_slice(&seq.to_be_bytes());
+        p[32] = 0x50;
+        p[33] = 0x18; // PSH|ACK
+        p[34..36].copy_from_slice(&64240u16.to_be_bytes());
+        p[40..].copy_from_slice(payload);
+        p
+    }
+
+    let payload: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let first = v4(1000, payload);
+    let second = v4(1000 + payload.len() as u32, b"second-data-passes-through");
+
+    let mut io = MockPacketIO::new();
+    io.push_inbound(first.clone(), PacketMeta::outbound(7));
+    io.push_inbound(second.clone(), PacketMeta::outbound(7));
+
+    let spec = StrategySpec {
+        name: "split+disorder".into(),
+        actions: vec![
+            DesyncAction::Split {
+                at: SplitPos::Offset(5),
+            },
+            DesyncAction::Disorder,
+        ],
+    };
+    let mut engine = Engine::new(io);
+    engine.set_strategy(Some(Box::new(DataStrategy::new(StrategyId(0), &spec))));
+    engine.run();
+    let io = engine.into_io();
+
+    // İlk paket iki segmente bölündü (ters sırada), ikinci paket aynen geçti.
+    assert_eq!(io.sent.len(), 3);
+
+    // Yeniden yazılan segmentleri ayrıştır, SEQ'e göre birleştir.
+    let mut rebuilt: Vec<(u32, Vec<u8>)> = Vec::new();
+    for (bytes, _meta) in &io.sent[..2] {
+        let p = TcpPacket::parse(bytes).unwrap();
+        assert_eq!(p.ttl(), 64);
+        rebuilt.push((p.seq(), p.payload().to_vec()));
+    }
+    rebuilt.sort_by_key(|(s, _)| *s);
+    let mut stream = Vec::new();
+    for (_, data) in &rebuilt {
+        stream.extend_from_slice(data);
+    }
+    assert_eq!(
+        stream, payload,
+        "birleştirilen akış özgün yükle aynı olmalı"
+    );
+
+    // Segmentlerin SEQ'leri doğru.
+    assert_eq!(rebuilt[0].0, 1000);
+    assert_eq!(rebuilt[1].0, 1005);
+
+    // İkinci (sonraki) paket değişmeden geçti.
+    assert_eq!(&io.sent[2].0, &second);
+}
