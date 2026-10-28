@@ -16,6 +16,21 @@ testing = []
 
 [dev-dependencies]
 serde_json = { workspace = true }
+criterion = { workspace = true }
+
+# Hot-path micro-benchmarks (docs/perf-budget.md). criterion owns its own CLI,
+# so `harness = false`. CI builds these with `cargo bench --no-run`; see
+# scripts/bench/latency.md for why they are not run in CI.
+[[bench]]
+name = "hotpath"
+harness = false
+
+# Engine-boundary passthrough + fail-open integration scaffold. Needs the
+# `testing` feature for `MockPacketIO`, so it is skipped under a plain
+# `cargo test --workspace` and run with `cargo test -p uf-core --features testing`.
+[[test]]
+name = "passthrough_failopen"
+required-features = ["testing"]
 
 [lints]
 workspace = true
