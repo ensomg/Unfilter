@@ -25,6 +25,7 @@ rustls = { version = "0.23.27", default-features = false, features = ["ring", "s
 windows-sys = "0.59.0"
 slint = { version = "1.11.0", default-features = false }
 criterion = { version = "0.6.0", default-features = false }
+embed-resource = "3.0.0"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

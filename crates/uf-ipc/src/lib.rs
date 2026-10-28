@@ -8,6 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod pipe;
+
 /// Protocol version. Bump on any breaking change to the message shapes below.
 pub const PROTOCOL_VERSION: u32 = 1;
 

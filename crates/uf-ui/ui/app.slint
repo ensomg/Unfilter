@@ -1,0 +1,757 @@
+// Unfilter main window (layout, colours and copy follow unfilter-ui-mockup_2.html).
+// Rendered by the slint software renderer: no rotation, blur, rounded clip or
+// gradient borders are used. Spinners use Path arcs; the splash is driven from
+// Rust (src/splash.rs) through the `splash` struct.
+
+global Theme {
+    out property <color> bg: #101114;
+    out property <color> bg2: #16181c;
+    out property <color> line: #26292f;
+    out property <color> line-hover: #3a3f48;
+    out property <color> text: #e6e8eb;
+    out property <color> mut: #8a9099;
+    out property <color> dim: #5d646e;
+    out property <color> ok: #4ade80;
+    out property <color> warn: #f5b942;
+    out property <color> bad: #f06b6b;
+    out property <color> ring: #3a3f48;
+    out property <string> ui-font: "Segoe UI";
+    out property <string> mono-font: "Consolas";
+}
+
+export enum Visual { offline, ready, scanning, connected, fault }
+
+export struct LogLine {
+    time: string,
+    host: string,
+    method: string,
+    ok: bool,
+}
+
+export struct TestRow {
+    label: string,
+    value: string,
+    ok: bool,
+}
+
+export struct SplashFrame {
+    glass-x: length, glass-y: length, glass-size: length, glass-radius: length, glass-alpha: float,
+    ripple-x: length, ripple-y: length, ripple-size: length, ripple-alpha: float,
+    shadow-x: length, shadow-y: length, shadow-size: length, shadow-alpha: float,
+    clip-x: length, clip-y: length, clip-w: length, clip-h: length,
+    logo-x: length, logo-y: length, logo-size: length, logo-alpha: float,
+    rim-a: string, rim-b: string, rim-alpha: float,
+    band-a: string, band-b: string, band-alpha: float,
+    main-opacity: float,
+}
+
+// The Unfilter mark (assets/logo/unfilter.svg), 64x64 design space.
+component LogoMark inherits Rectangle {
+    in property <color> u-color: Theme.text;
+    in property <color> dot-color: Theme.ok;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 64;
+        viewbox-height: 64;
+        fill: root.u-color;
+        commands: "M14 34 L14 12 A5 5 0 0 1 24 12 L24 34 A8 8 0 0 0 27.761 40.784 A5 5 0 0 1 22.462 49.264 A18 18 0 0 1 14 34 Z M50 34 L50 12 A5 5 0 0 0 40 12 L40 34 A8 8 0 0 1 36.239 40.784 A5 5 0 0 0 41.538 49.264 A18 18 0 0 0 50 34 Z";
+    }
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 64;
+        viewbox-height: 64;
+        fill: root.dot-color;
+        commands: "M32 52.5 A4 4 0 1 1 32 60.5 A4 4 0 1 1 32 52.5 Z";
+    }
+}
+
+// 24x24 stroked icon (mockup's feather-style icons).
+component Icon inherits Rectangle {
+    in property <string> d;
+    in property <color> tint: Theme.mut;
+    in property <length> stroke-w: 1.7px;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.d;
+        stroke: root.tint;
+        stroke-width: root.stroke-w;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        fill: transparent;
+    }
+}
+
+component SmallButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: txt.preferred-width + 24px;
+    height: 28px;
+    border-radius: 6px;
+    background: Theme.bg2;
+    border-width: 1px;
+    border-color: ta.has-hover && root.enabled ? Theme.line-hover : Theme.line;
+    txt := Text {
+        text: root.label;
+        font-size: 12px;
+        color: root.enabled ? Theme.text : Theme.dim;
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+component FootButton inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    callback clicked();
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        HorizontalLayout {
+            alignment: center;
+            Icon {
+                width: 18px;
+                height: 18px;
+                d: root.icon;
+                tint: ta.has-hover ? Theme.text : Theme.mut;
+            }
+        }
+        Text {
+            text: root.label;
+            font-size: 12px;
+            horizontal-alignment: center;
+            color: ta.has-hover ? Theme.text : Theme.mut;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component PanelHeader inherits Rectangle {
+    in property <string> title;
+    callback back();
+    height: 50px;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 10px;
+        Text {
+            text: "←";
+            font-size: 16px;
+            vertical-alignment: center;
+            color: back-ta.has-hover ? Theme.text : Theme.mut;
+            back-ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.back(); }
+            }
+        }
+        Text {
+            text: root.title;
+            font-weight: 600;
+            font-size: 13px;
+            vertical-alignment: center;
+            color: Theme.text;
+            horizontal-stretch: 1;
+        }
+    }
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> note;
+    height: 56px;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Theme.line;
+    }
+    VerticalLayout {
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.title;
+            font-size: 13px;
+            color: Theme.text;
+        }
+        if root.note != "": Text {
+            text: root.note;
+            font-size: 11px;
+            color: Theme.mut;
+        }
+    }
+    @children
+}
+
+export component AppWindow inherits Window {
+    title: "Unfilter";
+    width: 360px;
+    height: 620px;
+    background: Theme.bg;
+    default-font-family: Theme.ui-font;
+    default-font-size: 13px;
+
+    in property <Visual> visual: Visual.offline;
+    in property <string> state-title: "SERVİS YOK";
+    in property <string> state-sub: "";
+    in property <string> go-label: "BAĞLAN";
+    in property <bool> go-outline: false;
+    in property <bool> go-enabled: false;
+    in property <bool> controls-enabled: false;
+    in-out property <bool> game-mode: false;
+    in property <[LogLine]> logs: [];
+    in property <[TestRow]> test-rows: [];
+    in property <bool> test-busy: false;
+    in property <string> strategy-text: "Otomatik seçiliyor";
+    in property <string> version-text: "";
+    in-out property <string> test-host: "discord.com";
+    in property <string> toast-text: "";
+    in property <bool> toast-shown: false;
+    in property <bool> splash-active: true;
+    in property <SplashFrame> splash;
+    // 0 = main, 1 = Ayarlar, 2 = Loglar
+    in-out property <int> panel: 0;
+
+    callback go-clicked();
+    callback mode-selected(bool /* game */);
+    callback repair-clicked();
+    callback rescan-clicked();
+    callback test-clicked(string);
+    callback exit-clicked();
+    callback skip-splash();
+
+    property <color> state-color: root.visual == Visual.connected ? Theme.ok
+        : root.visual == Visual.scanning ? Theme.warn
+        : root.visual == Visual.fault ? Theme.bad
+        : root.visual == Visual.offline ? Theme.mut
+        : Theme.text;
+
+    // ---------------------------------------------------------------- main
+    main := Rectangle {
+        opacity: root.splash-active ? root.splash.main-opacity : 1.0;
+
+        // header (y 0..56). The logo box must match splash::HEADER_LOGO.
+        Rectangle {
+            x: 0;
+            y: 0;
+            height: 56px;
+            LogoMark {
+                x: 20px;
+                y: 17px;
+                width: 22px;
+                height: 22px;
+                visible: !root.splash-active;
+            }
+            Text {
+                x: 50px;
+                y: 0;
+                height: 56px;
+                vertical-alignment: center;
+                text: "UN";
+                font-weight: 700;
+                font-size: 15px;
+                letter-spacing: 3.3px;
+                color: Theme.text;
+            }
+            Text {
+                x: 50px + 29px;
+                y: 0;
+                height: 56px;
+                vertical-alignment: center;
+                text: "FILTER";
+                font-weight: 500;
+                font-size: 15px;
+                letter-spacing: 3.3px;
+                color: Theme.mut;
+            }
+            SmallButton {
+                x: parent.width - self.width - 20px;
+                y: (56px - self.height) / 2;
+                label: "Onar";
+                enabled: root.controls-enabled;
+                clicked => { root.repair-clicked(); }
+            }
+            Rectangle {
+                y: 55px;
+                height: 1px;
+                background: Theme.line;
+            }
+        }
+
+        // status ring
+        Rectangle {
+            x: (root.width - 132px) / 2;
+            y: 84px;
+            width: 132px;
+            height: 132px;
+            border-radius: 66px;
+            border-width: 2px;
+            border-color: root.visual == Visual.scanning ? Theme.ring.with-alpha(0.5)
+                : root.visual == Visual.connected ? Theme.ok
+                : root.visual == Visual.fault ? Theme.bad
+                : Theme.ring;
+            animate border-color { duration: 300ms; }
+
+            // rotating 3/4 arc while scanning (only exists, and only animates, then)
+            if root.visual == Visual.scanning: Path {
+                property <angle> a0: Math.mod(animation-tick() / 1ms, 1000) / 1000 * 360deg;
+                width: 132px;
+                height: 132px;
+                viewbox-width: 132;
+                viewbox-height: 132;
+                stroke: Theme.warn;
+                stroke-width: 2px;
+                stroke-line-cap: round;
+                fill: transparent;
+                MoveTo {
+                    x: 66 + 65 * Math.cos(a0);
+                    y: 66 + 65 * Math.sin(a0);
+                }
+                ArcTo {
+                    x: 66 + 65 * Math.cos(a0 + 270deg);
+                    y: 66 + 65 * Math.sin(a0 + 270deg);
+                    radius-x: 65;
+                    radius-y: 65;
+                    large-arc: true;
+                    sweep: true;
+                }
+            }
+
+            Icon {
+                x: (parent.width - 44px) / 2;
+                y: (parent.height - 44px) / 2;
+                width: 44px;
+                height: 44px;
+                stroke-w: 1.8px;
+                d: "M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3Z";
+                tint: root.visual == Visual.ready || root.visual == Visual.offline ? Theme.mut : root.state-color;
+                opacity: root.visual == Visual.scanning
+                    ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1600) / 1600 * 180deg))
+                    : 1.0;
+            }
+            if root.visual == Visual.connected: Icon {
+                x: (parent.width - 44px) / 2;
+                y: (parent.height - 44px) / 2;
+                width: 44px;
+                height: 44px;
+                stroke-w: 1.8px;
+                d: "m9 12 2 2 4-4";
+                tint: Theme.ok;
+            }
+        }
+
+        Text {
+            x: 0;
+            y: 238px;
+            width: root.width;
+            horizontal-alignment: center;
+            text: root.state-title;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 3.5px;
+            color: root.state-color;
+        }
+        Text {
+            x: 20px;
+            y: 274px;
+            width: root.width - 40px;
+            height: 36px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            text: root.state-sub;
+            color: Theme.mut;
+        }
+
+        // mode switch
+        Rectangle {
+            x: 20px;
+            y: 328px;
+            width: root.width - 40px;
+            height: 40px;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Theme.line;
+            background: Theme.bg2;
+            HorizontalLayout {
+                padding: 3px;
+                for game in [false, true]: Rectangle {
+                    border-radius: 6px;
+                    background: root.game-mode == game ? #262a31 : transparent;
+                    Text {
+                        text: game ? "Oyun Modu" : "Normal Mod";
+                        color: root.game-mode == game ? Theme.text
+                            : mode-ta.has-hover && root.controls-enabled ? Theme.text : Theme.mut;
+                    }
+                    mode-ta := TouchArea {
+                        enabled: root.controls-enabled;
+                        mouse-cursor: root.controls-enabled ? pointer : default;
+                        clicked => {
+                            if root.game-mode != game {
+                                root.game-mode = game;
+                                root.mode-selected(game);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // primary button
+        go := Rectangle {
+            x: 20px;
+            y: 380px;
+            width: root.width - 40px;
+            height: 48px;
+            border-radius: 8px;
+            background: !root.go-enabled ? #24272d
+                : root.go-outline ? transparent
+                : go-ta.has-hover ? #ffffff : #f1f2f4;
+            border-width: root.go-outline ? 1px : 0px;
+            border-color: go-ta.has-hover ? Theme.bad : Theme.line;
+            Text {
+                text: root.go-label;
+                font-weight: 700;
+                letter-spacing: 1.6px;
+                color: !root.go-enabled ? Theme.dim
+                    : root.go-outline ? (go-ta.has-hover ? Theme.bad : Theme.text)
+                    : #101114;
+            }
+            go-ta := TouchArea {
+                enabled: root.go-enabled;
+                mouse-cursor: root.go-enabled ? pointer : default;
+                clicked => { root.go-clicked(); }
+            }
+        }
+
+        // footer
+        Rectangle {
+            x: 0;
+            y: root.height - 66px;
+            width: root.width;
+            height: 66px;
+            Rectangle {
+                y: 0;
+                height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                FootButton {
+                    label: "AYARLAR";
+                    icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
+                    clicked => { root.panel = 1; }
+                }
+                Rectangle {
+                    width: 1px;
+                    background: Theme.line;
+                }
+                FootButton {
+                    label: "LOGLAR";
+                    icon: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z M14 3v5h5 M9 13h6 M9 17h6";
+                    clicked => { root.panel = 2; }
+                }
+                Rectangle {
+                    width: 1px;
+                    background: Theme.line;
+                }
+                FootButton {
+                    label: "ÇIKIŞ";
+                    icon: "M12 3v9 M6.3 6.8a8 8 0 1 0 11.4 0";
+                    clicked => { root.exit-clicked(); }
+                }
+            }
+        }
+
+        // ------------------------------------------------------- Ayarlar
+        if root.panel == 1: Rectangle {
+            background: Theme.bg;
+            TouchArea { }  // swallow clicks meant for the main screen
+            PanelHeader {
+                y: 0;
+                title: "Ayarlar";
+                back => { root.panel = 0; }
+            }
+            VerticalLayout {
+                y: 50px;
+                height: parent.height - 50px;
+                padding: 16px;
+                padding-top: 4px;
+                alignment: start;
+                SettingRow {
+                    title: "Strateji";
+                    note: root.strategy-text;
+                    SmallButton {
+                        x: parent.width - self.width;
+                        y: (parent.height - self.height) / 2;
+                        label: "Yeniden tara";
+                        enabled: root.controls-enabled;
+                        clicked => { root.rescan-clicked(); }
+                    }
+                }
+                SettingRow {
+                    title: "Mod";
+                    note: root.game-mode ? "Oyun Modu: Discord ve oyun UDP gecikmesi öncelikli" : "Normal Mod";
+                }
+                SettingRow {
+                    title: "Sürüm";
+                    note: root.version-text;
+                }
+                Text {
+                    text: "Diğer tercihler (başlangıçta çalıştır, DNS sağlayıcı, güncelleme) servis tarafında config/default.toml üzerinden yönetilir.";
+                    wrap: word-wrap;
+                    font-size: 11px;
+                    color: Theme.dim;
+                }
+            }
+        }
+
+        // -------------------------------------------------------- Loglar
+        if root.panel == 2: Rectangle {
+            background: Theme.bg;
+            TouchArea { }
+            PanelHeader {
+                y: 0;
+                title: "Loglar";
+                back => { root.panel = 0; }
+            }
+            VerticalLayout {
+                y: 50px;
+                height: parent.height - 50px;
+                padding: 16px;
+                spacing: 10px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    height: 32px;
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: host-input.has-focus ? Theme.line-hover : Theme.line;
+                        background: Theme.bg2;
+                        host-input := TextInput {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            single-line: true;
+                            text <=> root.test-host;
+                            color: Theme.text;
+                            selection-background-color: #2f6b45;
+                            font-size: 13px;
+                            accepted => { root.test-clicked(self.text); }
+                        }
+                        if root.test-host == "": Text {
+                            x: 10px;
+                            text: "site adresi";
+                            color: Theme.dim;
+                        }
+                    }
+                    SmallButton {
+                        height: 32px;
+                        label: root.test-busy ? "Test ediliyor…" : "Test et";
+                        enabled: root.controls-enabled && !root.test-busy;
+                        clicked => { root.test-clicked(root.test-host); }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 4px;
+                    for row in root.test-rows: HorizontalLayout {
+                        Text {
+                            text: row.label;
+                            font-size: 12px;
+                            color: Theme.mut;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: row.value;
+                            font-size: 12px;
+                            color: row.ok ? Theme.ok : Theme.bad;
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 1px;
+                    background: Theme.line;
+                }
+                Flickable {
+                    vertical-stretch: 1;
+                    content-height: log-col.preferred-height;
+                    log-col := VerticalLayout {
+                        alignment: start;
+                        for l in root.logs: HorizontalLayout {
+                            spacing: 8px;
+                            height: 19px;
+                            Text {
+                                text: l.time;
+                                font-family: Theme.mono-font;
+                                font-size: 11.5px;
+                                color: Theme.dim;
+                            }
+                            Text {
+                                text: l.host;
+                                font-family: Theme.mono-font;
+                                font-size: 11.5px;
+                                color: Theme.mut;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            Text {
+                                text: l.method;
+                                font-family: Theme.mono-font;
+                                font-size: 11.5px;
+                                color: l.ok ? Theme.ok : Theme.warn;
+                                overflow: elide;
+                            }
+                        }
+                        if root.logs.length == 0: Text {
+                            text: "Henüz log yok. Bağlandığında site erişimleri burada görünür.";
+                            wrap: word-wrap;
+                            font-size: 11.5px;
+                            color: Theme.dim;
+                        }
+                    }
+                }
+            }
+        }
+
+        // toast
+        Rectangle {
+            x: 16px;
+            y: root.height - 84px - self.height + (root.toast-shown ? 0px : 6px);
+            width: root.width - 32px;
+            height: toast-txt.preferred-height + 20px;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Theme.line;
+            background: #22252b;
+            opacity: root.toast-shown ? 1.0 : 0.0;
+            animate opacity, y { duration: 250ms; }
+            toast-txt := Text {
+                x: 14px;
+                width: parent.width - 28px;
+                text: root.toast-text;
+                font-size: 12px;
+                wrap: word-wrap;
+                color: Theme.text;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- splash
+    if root.splash-active: Rectangle {
+        background: Theme.bg.with-alpha(1.0 - root.splash.main-opacity);
+
+        // soft contact shadow (radial gradient: the renderer draws no blur)
+        Rectangle {
+            x: root.splash.shadow-x;
+            y: root.splash.shadow-y;
+            width: root.splash.shadow-size;
+            height: root.splash.shadow-size;
+            opacity: root.splash.shadow-alpha;
+            background: @radial-gradient(circle, #000000c0 0%, #00000060 22%, #00000000 50%);
+        }
+        // ripple ring
+        Rectangle {
+            x: root.splash.ripple-x;
+            y: root.splash.ripple-y;
+            width: root.splash.ripple-size;
+            height: root.splash.ripple-size;
+            border-radius: self.width / 2;
+            border-width: 1.5px;
+            border-color: #ffffff.with-alpha(root.splash.ripple-alpha);
+            background: transparent;
+        }
+        // the logo, magnified behind the glass and clipped to it
+        Rectangle {
+            x: root.splash.clip-x;
+            y: root.splash.clip-y;
+            width: root.splash.clip-w;
+            height: root.splash.clip-h;
+            clip: true;
+            LogoMark {
+                x: root.splash.logo-x - root.splash.clip-x;
+                y: root.splash.logo-y - root.splash.clip-y;
+                width: root.splash.logo-size;
+                height: root.splash.logo-size;
+                opacity: root.splash.logo-alpha;
+            }
+        }
+        // glass face, light band and rim highlight
+        Rectangle {
+            x: root.splash.glass-x;
+            y: root.splash.glass-y;
+            width: root.splash.glass-size;
+            height: root.splash.glass-size;
+            border-radius: root.splash.glass-radius;
+            background: #ffffff.with-alpha(0.075 * root.splash.glass-alpha);
+            border-width: 1px;
+            border-color: #ffffff.with-alpha(0.22 * root.splash.glass-alpha);
+            // inner edge, a hint of thickness
+            Rectangle {
+                x: 3px;
+                y: 3px;
+                width: parent.width - 6px;
+                height: parent.height - 6px;
+                border-radius: Math.max(0px, root.splash.glass-radius - 3px);
+                border-width: 1px;
+                border-color: #ffffff.with-alpha(0.06 * root.splash.glass-alpha);
+                background: transparent;
+            }
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: root.splash.glass-size / 1px;
+                viewbox-height: root.splash.glass-size / 1px;
+                commands: root.splash.band-a;
+                fill: #ffffff.with-alpha(0.06 * root.splash.band-alpha);
+            }
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: root.splash.glass-size / 1px;
+                viewbox-height: root.splash.glass-size / 1px;
+                commands: root.splash.band-b;
+                fill: #ffffff.with-alpha(0.10 * root.splash.band-alpha);
+            }
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: root.splash.glass-size / 1px;
+                viewbox-height: root.splash.glass-size / 1px;
+                commands: root.splash.rim-b;
+                stroke: #ffffff.with-alpha(0.4 * root.splash.rim-alpha);
+                stroke-width: 1.6px;
+                stroke-line-cap: round;
+                fill: transparent;
+            }
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: root.splash.glass-size / 1px;
+                viewbox-height: root.splash.glass-size / 1px;
+                commands: root.splash.rim-a;
+                stroke: #ffffff.with-alpha(root.splash.rim-alpha);
+                stroke-width: 2.2px;
+                stroke-line-cap: round;
+                fill: transparent;
+            }
+        }
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.skip-splash(); }
+        }
+    }
+}

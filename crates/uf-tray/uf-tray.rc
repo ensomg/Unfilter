@@ -1,0 +1,8 @@
+// Generated icons: python -I assets/icons/gen_icons.py
+// Ids must match crates/uf-tray/src/menu.rs (mod icon).
+1 ICON "../../assets/icons/unfilter.ico"
+101 ICON "../../assets/icons/tray-offline.ico"
+102 ICON "../../assets/icons/tray-ready.ico"
+103 ICON "../../assets/icons/tray-scanning.ico"
+104 ICON "../../assets/icons/tray-connected.ico"
+105 ICON "../../assets/icons/tray-fault.ico"

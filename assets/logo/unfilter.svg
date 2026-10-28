@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Unfilter</title>
+  <!-- Unfilter mark: a bold rounded "U" (an opened funnel) whose bottom is
+       broken open; the dot below is what now passes through.
+       Geometry: centre-line stems x=19 / x=45 from y=12 to y=34, arc r=13
+       around (32,34) stopping 32 degrees short of the bottom on each side,
+       stroke half-width 5, round caps. Same path data is used in
+       crates/uf-ui/ui/logo.slint and by assets/icons/gen_icons.py. -->
+  <path fill="#e6e8eb" d="M14 34 L14 12 A5 5 0 0 1 24 12 L24 34 A8 8 0 0 0 27.761 40.784 A5 5 0 0 1 22.462 49.264 A18 18 0 0 1 14 34 Z"/>
+  <path fill="#e6e8eb" d="M50 34 L50 12 A5 5 0 0 0 40 12 L40 34 A8 8 0 0 1 36.239 40.784 A5 5 0 0 0 41.538 49.264 A18 18 0 0 0 50 34 Z"/>
+  <path fill="#4ade80" d="M32 52.5 A4 4 0 1 1 32 60.5 A4 4 0 1 1 32 52.5 Z"/>
+</svg>
