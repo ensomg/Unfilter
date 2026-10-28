@@ -1,0 +1,42 @@
+# Unfilter varsayılan yapılandırması.
+#
+# Bu dosya Program Files\Unfilter\config\default.toml konumuna kurulur ve
+# servis (uf-service) tarafından okunur. Kullanıcıya özel değişiklikler
+# %ProgramData%\Unfilter\config.toml içine yazılır; servis önce bunu, yoksa
+# bu varsayılanı yükler. Sıfır yapılandırma hedefi (§2): bu dosyaya hiç
+# dokunmadan kurulum çalışır.
+
+# Şema sürümü; kırıcı değişiklikte artırılır.
+schema = 1
+
+[general]
+# Açılışta otomatik bağlan (tray oturum açınca servise Connect gönderir).
+autostart = true
+# Çalışma modu: "normal" veya "game" (Discord/oyun UDP gecikmesini önceler).
+mode = "normal"
+
+[dns]
+# Paket seviyesinde DNS yönlendirme (§5.2). Sistem DNS ayarı DEĞİŞTİRİLMEZ;
+# servis ölünce DNS kendiliğinden eski haline döner.
+enabled = true
+# Güvenilir yukarı-akış çözücüler. İlk yanıt veren kullanılır (yarış).
+# Bootstrap IP'leri gömülüdür; isimler yalnızca SNI/doğrulama içindir.
+upstreams = [
+    { kind = "doh", host = "cloudflare-dns.com", ip = "1.1.1.1" },
+    { kind = "dot", host = "dns.google", ip = "8.8.8.8" },
+]
+# Pozitif/negatif cache kayıt sınırı.
+cache_entries = 4096
+
+[engine]
+# Strateji probu: engelli hedefte çalışan desync stratejisini otomatik arar.
+auto_probe = true
+# Prob sırası boşsa gömülü varsayılan strateji listesi kullanılır (§5.4).
+# Kullanıcı burada sabit bir strateji zorlayabilir, ör: strategy = "split+fake_badsum".
+# strategy = ""
+
+[logging]
+# Canlı log paneli için olay akışı. Dosyaya yazım kapalıdır (gizlilik, §5.9);
+# açılırsa loglar %ProgramData%\Unfilter\logs altına gider.
+level = "info"
+to_file = false
