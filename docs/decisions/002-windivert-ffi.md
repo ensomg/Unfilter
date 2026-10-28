@@ -9,4 +9,4 @@
 - Üçüncü parti crate'ler build.rs ile kaynak derleme veya vendored binary getirir; boyut ve tedarik zinciri kontrolü zorlaşır.
 - WinDivert 2.2 ABI'si yıllardır sabit.
 
-**Sürüm:** WinDivert 2.2.2 (imzalı sürücü, LGPLv3 / GPLv2). Dinamik bağlanır; Unfilter GPL-3.0-or-later lisanslıdır, uyumlu. İkili dosyalar Faz 1'de resmi sürümden alınır ve SHA-256 ile `assets/windivert/SHA256SUMS` içinde sabitlenir.
+**Sürüm:** WinDivert 2.2.2 (imzalı sürücü, LGPLv3 / GPLv2). Dinamik bağlanır; Unfilter MIT lisanslıdır; WinDivert ayrı, değiştirilmemiş LGPLv3 / GPLv2 ikili olarak dağıtıldığından uyumludur. İkili dosyalar Faz 1'de resmi sürümden alınır ve SHA-256 ile `assets/windivert/SHA256SUMS` içinde sabitlenir.

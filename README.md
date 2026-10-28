@@ -93,7 +93,3 @@ Kurucu ve dosya düzeni: [installer/README.md](installer/README.md).
 Bu depo **MIT** lisanslıdır ([LICENSE](LICENSE)). WinDivert bağımlılığı LGPLv3 /
 GPLv2 olarak **dinamik** bağlanır ve ayrı, değiştirilmemiş imzalı ikili olarak
 dağıtılır.
-
-> ⚠️ **Lisans tutarsızlığı (çözüm bekliyor):** depo kökü MIT iken workspace
-> `Cargo.toml` içinde `license = "GPL-3.0-or-later"` yazıyor. Bunlar çelişir.
-> Ayrıntı ve öneri: [docs/phase-reports/F9.md](docs/phase-reports/F9.md) §3.
