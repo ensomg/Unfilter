@@ -7,8 +7,18 @@ license.workspace = true
 publish.workspace = true
 description = "Optional SOCKS5/HTTP CONNECT/WireGuard fallback for IP-blocked targets"
 
+[features]
+default = []
+# Userspace WireGuard upstream. Off by default: v1 only defines the interface and
+# config; the live handshake/relay lands in v2 (see src/wireguard.rs).
+wireguard = []
+
 [dependencies]
 uf-core = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
