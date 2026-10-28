@@ -24,6 +24,9 @@ pub enum Error {
     Capacity,
     /// The platform I/O backend reported it has shut down; stop the loop.
     Shutdown,
+    /// A platform I/O call failed transiently. Carries the OS error code. The
+    /// engine treats this as fail-open (count and continue), not fatal.
+    Io(u32),
 }
 
 impl fmt::Display for Error {
@@ -34,6 +37,7 @@ impl fmt::Display for Error {
             Error::Malformed => "malformed protocol framing",
             Error::Capacity => "capacity limit reached",
             Error::Shutdown => "io backend shut down",
+            Error::Io(code) => return write!(f, "io backend error (os code {code})"),
         };
         f.write_str(s)
     }

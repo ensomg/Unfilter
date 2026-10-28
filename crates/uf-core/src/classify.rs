@@ -90,3 +90,54 @@ impl L7Proto {
         METHODS.iter().any(|m| payload.starts_with(m))
     }
 }
+
+/// Classify a flow's opening payload: sniff the protocol, then run the matching
+/// parser to recover the server name. Allocation-free; every field borrows into
+/// `payload`. A parse failure degrades gracefully to a partly-filled result
+/// (the engine then passes the flow through).
+pub fn classify(payload: &[u8], dst_port: u16) -> Classification<'_> {
+    let proto = L7Proto::sniff(payload, dst_port);
+    let mut out = Classification {
+        proto: Some(proto),
+        ..Classification::default()
+    };
+    match proto {
+        L7Proto::Tls => {
+            let _ = crate::parse::tls::parse_client_hello(payload, &mut out);
+        }
+        L7Proto::Http => {
+            let _ = crate::parse::http::parse_request(payload, &mut out);
+        }
+        // QUIC Initial decryption and DNS live in uf-quic / uf-dns.
+        _ => {}
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_tls_sni() {
+        // "GET "-free TLS record is built by the tls parser tests; here just
+        // check the dispatch picks TLS and fills nothing on a stub.
+        let payload = [0x16u8, 0x03, 0x03, 0x00, 0x00, 0x01];
+        let c = classify(&payload, 443);
+        assert_eq!(c.proto, Some(L7Proto::Tls));
+    }
+
+    #[test]
+    fn classify_http_host() {
+        let req = b"GET / HTTP/1.1\r\nHost: site.example\r\n\r\n";
+        let c = classify(req, 80);
+        assert_eq!(c.proto, Some(L7Proto::Http));
+        assert_eq!(c.http_host, Some("site.example"));
+    }
+
+    #[test]
+    fn classify_dns_by_port() {
+        let c = classify(&[0x00, 0x01], 53);
+        assert_eq!(c.proto, Some(L7Proto::Dns));
+    }
+}

@@ -15,6 +15,7 @@ pub mod engine;
 pub mod error;
 pub mod flow;
 pub mod io;
+pub mod parse;
 pub mod strategy;
 
 #[cfg(any(test, feature = "testing"))]

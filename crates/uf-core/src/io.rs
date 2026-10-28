@@ -41,6 +41,8 @@ pub struct PacketMeta {
     pub loopback: bool,
     /// Packet was injected by us or another program (avoid re-processing ours).
     pub impostor: bool,
+    /// Packet is IPv6 (affects header parsing and re-inject address flags).
+    pub ipv6: bool,
     /// IP and TCP/UDP checksums are known-valid as captured. After we mutate a
     /// packet we clear this so the backend recomputes them before injection.
     pub checksums_valid: bool,
@@ -58,6 +60,7 @@ impl PacketMeta {
             sub_if_index: 0,
             loopback: false,
             impostor: false,
+            ipv6: false,
             checksums_valid: true,
             captured_at_nanos: 0,
         }
@@ -123,6 +126,23 @@ impl PacketBuf {
     /// Clear the logical length without touching the backing bytes.
     pub fn clear(&mut self) {
         self.len = 0;
+    }
+
+    /// The full backing storage as a mutable slice, for a capture backend to
+    /// write a freshly received packet into before [`set_len`](Self::set_len).
+    /// The bytes are always initialised (the array is zero-filled), so this is
+    /// safe.
+    pub fn backing_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    /// Set the logical length after writing into [`backing_mut`](Self::backing_mut).
+    ///
+    /// # Panics
+    /// If `len` exceeds [`MAX_PACKET`].
+    pub fn set_len(&mut self, len: usize) {
+        assert!(len <= MAX_PACKET, "length {len} exceeds MAX_PACKET");
+        self.len = len;
     }
 }
 

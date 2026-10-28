@@ -10,5 +10,11 @@ description = "PacketIO implementations (WinDivert on Windows)"
 [dependencies]
 uf-core = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+] }
+
 [lints]
 workspace = true

@@ -53,6 +53,7 @@ impl OutPacket {
                 sub_if_index: 0,
                 loopback: false,
                 impostor: false,
+                ipv6: false,
                 checksums_valid: false,
                 captured_at_nanos: 0,
             },
