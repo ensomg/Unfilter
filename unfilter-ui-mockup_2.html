@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unfilter UI</title>
+<style>
+:root{--bg:#101114;--bg2:#16181c;--line:#26292f;--text:#e6e8eb;--mut:#8a9099;--ok:#4ade80;--warn:#f5b942;--bad:#f06b6b;--ring:#3a3f48}
+*{box-sizing:border-box;margin:0}
+body{background:#1b2230;min-height:100vh;display:grid;place-items:center;padding:20px;font:13px/1.4 "Segoe UI Variable","Segoe UI",system-ui,sans-serif;color:var(--text)}
+.win{width:360px;height:620px;background:var(--bg);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.tb{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:12px;color:var(--mut);border-bottom:1px solid var(--line)}
+.tb span:last-child{letter-spacing:6px}
+.head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+.brand{font-weight:700;letter-spacing:.22em;font-size:15px}
+.brand i{font-style:normal;color:var(--mut);font-weight:500}
+.sbtn{background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.sbtn:hover{border-color:#3a3f48}
+.main{flex:1;display:flex;flex-direction:column;align-items:center;padding:28px 20px 0}
+.ring{width:132px;height:132px;border-radius:50%;border:2px solid var(--ring);display:grid;place-items:center;transition:border-color .3s}
+.ring svg{width:44px;height:44px;stroke:var(--mut);fill:none;stroke-width:1.8;stroke-linejoin:round;transition:stroke .3s}
+.ring.on{border-color:var(--ok)}.ring.on svg{stroke:var(--ok)}
+.ring.scan{border-color:var(--warn);border-top-color:transparent;animation:r 1s linear infinite}
+.ring.scan svg{stroke:var(--warn);animation:r 1s linear infinite reverse}
+@keyframes r{to{transform:rotate(360deg)}}
+.st{margin-top:22px;font-size:22px;font-weight:700;letter-spacing:.16em}
+.st.on{color:var(--ok)}.st.scan{color:var(--warn)}
+.sub{margin-top:6px;color:var(--mut);text-align:center;min-height:36px}
+.modes{margin-top:18px;width:100%;display:flex;border:1px solid var(--line);border-radius:8px;padding:3px;background:var(--bg2)}
+.modes button{flex:1;background:none;border:0;color:var(--mut);padding:8px;border-radius:6px;font:inherit;cursor:pointer}
+.modes button.on{background:#262a31;color:var(--text)}
+.go{margin-top:12px;width:100%;height:48px;border-radius:8px;border:0;background:#f1f2f4;color:#101114;font:inherit;font-weight:700;letter-spacing:.12em;cursor:pointer}
+.go:hover{background:#fff}
+.go.on{background:transparent;color:var(--text);border:1px solid var(--line)}
+.go.on:hover{border-color:var(--bad);color:var(--bad)}
+.foot{display:flex;border-top:1px solid var(--line);margin-top:auto}
+.foot button{flex:1;background:none;border:0;color:var(--mut);padding:14px 0;font:inherit;font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px}
+.foot button+button{border-left:1px solid var(--line)}
+.foot button:hover{color:var(--text)}
+.foot svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* panels */
+.panel{position:absolute;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:5}
+.panel.on{display:flex}
+.ph{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);font-weight:600}
+.ph button{background:none;border:0;color:var(--mut);cursor:pointer;font:inherit;font-size:16px}
+.pb{padding:16px;overflow:auto;flex:1}
+.row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.row small{display:block;color:var(--mut);font-size:11px}
+.sw{width:34px;height:20px;border-radius:10px;background:#2c3037;position:relative;cursor:pointer;transition:.2s;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#aab0b8;transition:.2s}
+.sw.on{background:#2f6b45}.sw.on::after{left:16px;background:#fff}
+select,input{background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 10px;font:inherit}
+input{flex:1;min-width:0}
+.tr{display:flex;gap:8px;margin-bottom:10px}
+.res{font-size:12px;margin-bottom:12px;display:grid;gap:4px}
+.res div{display:flex;justify-content:space-between;color:var(--mut)}
+.res b{font-weight:500;color:var(--text)}
+.res .y{color:var(--ok)}.res .n{color:var(--bad)}
+.log{font:11.5px/1.7 Consolas,"Cascadia Mono",monospace;color:var(--mut);border-top:1px solid var(--line);padding-top:8px}
+.log div{display:flex;gap:8px;white-space:nowrap;overflow:hidden}
+.log .t{color:#5d646e}.log .k{color:var(--ok)}.log .f{color:var(--warn)}
+.toast{position:absolute;left:16px;right:16px;bottom:84px;background:#22252b;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:12px;opacity:0;transform:translateY(6px);transition:.25s;z-index:9;pointer-events:none}
+.toast.show{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="tb"><span>Unfilter</span><span>– ▢ ✕</span></div>
+  <div class="head"><div class="brand">UN<i>FILTER</i></div><button class="sbtn" id="repair">Onar</button></div>
+
+  <div class="main">
+    <div class="ring" id="ring"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3Z"/><path id="chk" d="m9 12 2 2 4-4" style="display:none"/></svg></div>
+    <div class="st" id="st">HAZIR</div>
+    <div class="sub" id="sub">Engelleri aşmak için bağlan.</div>
+    <div class="modes"><button class="on" data-m="Normal">Normal Mod</button><button data-m="Oyun">Oyun Modu</button></div>
+    <button class="go" id="go">BAĞLAN</button>
+  </div>
+
+  <div class="foot">
+    <button data-open="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>AYARLAR</button>
+    <button data-open="log"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>LOGLAR</button>
+    <button id="exit"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>ÇIKIŞ</button>
+  </div>
+
+  <div class="panel" id="set">
+    <div class="ph"><button data-close>←</button>Ayarlar</div>
+    <div class="pb">
+      <div class="row"><div>Windows ile başlat</div><div class="sw on"></div></div>
+      <div class="row"><div>Otomatik güncelle<small>Sürüm 1.0.0 · güncel</small></div><div class="sw on"></div></div>
+      <div class="row"><div>Açılınca otomatik bağlan</div><div class="sw on"></div></div>
+      <div class="row"><div>DNS sağlayıcı</div><select><option>Otomatik</option><option>Cloudflare</option><option>Google</option><option>Quad9</option></select></div>
+      <div class="row"><div>Strateji<small>Otomatik seçiliyor</small></div><button class="sbtn" id="rescan">Yeniden tara</button></div>
+    </div>
+  </div>
+
+  <div class="panel" id="log">
+    <div class="ph"><button data-close>←</button>Loglar</div>
+    <div class="pb">
+      <div class="tr"><input id="url" value="discord.com" placeholder="site adresi"><button class="sbtn" id="test">Test et</button></div>
+      <div class="res" id="res"></div>
+      <div class="log" id="lg"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let on=false,busy=false,n=0,tm=null,mode="Normal";
+const S=["split+disorder","fake ttl=4","tls-record-split"],H=["discord.com","youtube.com","x.com","wikipedia.org","roblox.com","twitch.tv","reddit.com"];
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),2600)}
+function log(h,s,k){const d=document.createElement("div"),t=new Date().toLocaleTimeString("tr-TR");d.innerHTML=`<span class="t">${t}</span><span>${h}</span><span class="${k?"k":"f"}">${s}</span>`;const l=$("#lg");l.prepend(d);while(l.children.length>40)l.lastChild.remove()}
+function ui(c,txt,sub,btn){$("#ring").className="ring "+c;$("#st").className="st "+c;$("#st").textContent=txt;$("#sub").textContent=sub;$("#go").textContent=btn;$("#go").className="go "+(on?"on":"");$("#chk").style.display=c==="on"?"":"none"}
+$("#go").onclick=()=>{
+  if(busy)return;
+  if(on){on=false;clearInterval(tm);ui("","HAZIR","Engelleri aşmak için bağlan.","BAĞLAN");return}
+  busy=true;ui("scan","TARANIYOR","Ağına uygun yöntem seçiliyor…","İPTAL");
+  setTimeout(()=>{busy=false;on=true;ui("on","BAĞLI",`${S[0]} · 0.4 ms · ${mode} Mod`,"BAĞLANTIYI KES");toast("Yöntem seçildi, ağ: Türk Telekom");
+    tm=setInterval(()=>{const f=Math.random()<.12;log(H[Math.random()*H.length|0],f?S[1]:S[0],!f)},1500)},2400)};
+$$(".modes button").forEach(b=>b.onclick=()=>{mode=b.dataset.m;$$(".modes button").forEach(x=>x.classList.toggle("on",x===b));if(on)$("#sub").textContent=`${S[0]} · 0.4 ms · ${mode} Mod`});
+$$("[data-open]").forEach(b=>b.onclick=()=>$("#"+b.dataset.open).classList.add("on"));
+$$("[data-close]").forEach(b=>b.onclick=()=>b.closest(".panel").classList.remove("on"));
+$$(".sw").forEach(s=>s.onclick=()=>s.classList.toggle("on"));
+$("#repair").onclick=()=>toast("Sürücü ve ağ ayarları kontrol ediliyor…");
+$("#rescan").onclick=()=>{toast("Ağ yeniden taranıyor…")};
+$("#exit").onclick=()=>toast("Çıkış: servis arka planda çalışmaya devam eder");
+$("#test").onclick=()=>{const h=$("#url").value||"discord.com",r=$("#res");r.innerHTML="";
+  [["DNS","sahte yanıt, DoH ile düzeltildi",1],["TCP","bağlandı",1],["TLS/SNI","DPI tarafından kesiliyor",0],["Yöntem: "+S[0],"açıldı",1]].forEach((x,i)=>setTimeout(()=>{r.insertAdjacentHTML("beforeend",`<div><span>${x[0]}</span><b class="${x[2]?"y":"n"}">${x[1]}</b></div>`)},i*450));
+  setTimeout(()=>toast(h+": engel türü DNS + DPI"),1900)};
+for(let i=0;i<6;i++)log(H[i],S[0],true);
+</script>
+</body>
+</html>

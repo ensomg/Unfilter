@@ -1,0 +1,16 @@
+[package]
+name = "uf-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Privileged Windows service hosting the engine"
+
+[dependencies]
+uf-core = { workspace = true }
+uf-capture = { workspace = true }
+uf-ipc = { workspace = true }
+
+[lints]
+workspace = true

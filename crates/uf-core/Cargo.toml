@@ -1,0 +1,21 @@
+[package]
+name = "uf-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Platform-independent strategy engine, flow table and desync actions"
+
+[dependencies]
+serde = { workspace = true }
+
+[features]
+# Exposes `MockPacketIO` and other helpers to downstream crates' tests.
+testing = []
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

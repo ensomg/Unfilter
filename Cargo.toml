@@ -1,0 +1,54 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+uf-core = { path = "crates/uf-core" }
+uf-capture = { path = "crates/uf-capture" }
+uf-dns = { path = "crates/uf-dns" }
+uf-quic = { path = "crates/uf-quic" }
+uf-probe = { path = "crates/uf-probe" }
+uf-fallback = { path = "crates/uf-fallback" }
+uf-ipc = { path = "crates/uf-ipc" }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+rtrb = "0.3.2"
+tokio = { version = "1.45.1", default-features = false }
+rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12"] }
+windows-sys = "0.59.0"
+slint = { version = "1.11.0", default-features = false }
+criterion = { version = "0.6.0", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+
+[profile.release.package.uf-tray]
+opt-level = "s"
+
+[profile.release.package.uf-ui]
+opt-level = "s"
+
+[profile.dev]
+panic = "abort"
