@@ -7,8 +7,15 @@ license.workspace = true
 publish.workspace = true
 description = "QUIC Initial handling and UDP flow management"
 
+[features]
+# Initial-packet decryption (header protection + AES-128-GCM) via ring.
+# On by default; turn it off to build only the public-header parser.
+default = ["decrypt"]
+decrypt = ["dep:ring"]
+
 [dependencies]
 uf-core = { workspace = true }
+ring = { version = "0.17", optional = true }
 
 [lints]
 workspace = true
