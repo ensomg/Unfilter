@@ -8,6 +8,7 @@
 //! - [`fingerprint`] (Windows): the network fingerprint source.
 
 pub mod config;
+pub mod ipc;
 pub mod orchestrator;
 
 #[cfg(feature = "live-tls")]

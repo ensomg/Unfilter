@@ -97,11 +97,21 @@ fn build_resolver(cfg: &Config) -> Option<uf_dns::Resolver> {
 fn main() {
     let orch = start_up();
     let status = orch.status();
-    // Until the SCM dispatcher and pipe server land (F6 integration), report
-    // readiness on stderr so a manual run is observable. The real service
-    // registers with the SCM and serves clients here.
     eprintln!(
         "uf-service hazır: durum={:?}, mod={:?}",
         status.state, status.mode
     );
+
+    // Serve tray/UI clients on the ADR-005 named pipe. This blocks. (Running as
+    // a real Windows service still needs an SCM dispatcher wrapper; invoked from
+    // a console this already serves the control plane. The packet engine is
+    // started on Connect and needs the WinDivert driver + administrator rights.)
+    #[cfg(windows)]
+    {
+        use std::sync::{Arc, Mutex};
+        let shared = Arc::new(Mutex::new(orch));
+        if let Err(e) = uf_service::ipc::serve(uf_ipc::PIPE_NAME, shared) {
+            eprintln!("uf-service pipe sunucusu durdu: {e}");
+        }
+    }
 }
