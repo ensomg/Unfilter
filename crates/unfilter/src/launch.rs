@@ -224,27 +224,34 @@ pub fn prepare_windivert() {
     let beside = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("WinDivert.dll")));
-    if beside.is_some_and(|p| p.is_file()) {
-        return;
-    }
-    #[cfg(embedded_windivert)]
-    if let Some(dir) = windivert_dir() {
-        let write = |name: &str, bytes: &[u8]| -> std::io::Result<()> {
-            let path = dir.join(name);
-            if std::fs::read(&path).is_ok_and(|cur| cur == bytes) {
-                return Ok(());
-            }
-            std::fs::write(path, bytes)
-        };
-        let ok = std::fs::create_dir_all(&dir).is_ok()
-            && write("WinDivert.dll", WINDIVERT_DLL).is_ok()
-            && write("WinDivert64.sys", WINDIVERT_SYS).is_ok();
-        // Use the folder even if a rewrite failed (e.g. the driver has the
-        // .sys open): an identical copy from an earlier run is already there.
-        let _ = ok;
-        uf_capture::windivert::set_dll_dir(dir);
+    if !beside.is_some_and(|p| p.is_file()) {
+        extract_embedded();
     }
 }
+
+/// Extract the embedded WinDivert files (when this build has them).
+#[cfg(embedded_windivert)]
+fn extract_embedded() {
+    let Some(dir) = windivert_dir() else {
+        return;
+    };
+    let write = |name: &str, bytes: &[u8]| -> std::io::Result<()> {
+        let path = dir.join(name);
+        if std::fs::read(&path).is_ok_and(|cur| cur == bytes) {
+            return Ok(());
+        }
+        std::fs::write(path, bytes)
+    };
+    // Use the folder even if a rewrite failed (e.g. the driver has the .sys
+    // open): an identical copy from an earlier run is already there.
+    let _ = std::fs::create_dir_all(&dir)
+        .and_then(|()| write("WinDivert.dll", WINDIVERT_DLL))
+        .and_then(|()| write("WinDivert64.sys", WINDIVERT_SYS));
+    uf_capture::windivert::set_dll_dir(dir);
+}
+
+#[cfg(not(embedded_windivert))]
+fn extract_embedded() {}
 
 /// The no-flag start-up. Returns once the tray exits.
 pub fn run_app() {
