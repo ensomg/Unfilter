@@ -78,7 +78,8 @@ fn connect_ip(
     server_name: ServerName<'static>,
 ) -> Result<Tls, TransportError> {
     let addr = SocketAddr::new(ip, port);
-    let sock = TcpStream::connect_timeout(&addr, DEFAULT_TIMEOUT).map_err(|_| TransportError::Network)?;
+    let sock =
+        TcpStream::connect_timeout(&addr, DEFAULT_TIMEOUT).map_err(|_| TransportError::Network)?;
     sock.set_read_timeout(Some(DEFAULT_TIMEOUT))
         .map_err(|_| TransportError::Network)?;
     sock.set_write_timeout(Some(DEFAULT_TIMEOUT))
