@@ -29,7 +29,7 @@ mod app {
 
     use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
     use uf_ipc::pipe::{LinkEvent, OfflineReason, ServiceLink};
-    use uf_ipc::{Event, Mode, PIPE_NAME, Request, ResponsePayload, ServerMessage};
+    use uf_ipc::{Event, PIPE_NAME, Request, ResponsePayload, ServerMessage};
 
     use crate::view::{self, Conn, Offline};
     use crate::{AppWindow, LogLine, SplashFrame, TestRow, Visual, splash, win};
@@ -97,7 +97,6 @@ mod app {
         ui.set_go_outline(vm.button_outline);
         ui.set_go_enabled(vm.button_enabled);
         ui.set_controls_enabled(vm.controls_enabled);
-        ui.set_game_mode(vm.game_mode);
         let strategy = match conn {
             Conn::Online(st) => st.strategy.as_deref().map(|s| format!("Aktif: {s}")),
             _ => None,
@@ -219,7 +218,7 @@ mod app {
                         if matches!(req, Some(Request::TestSite { .. })) {
                             ui.set_test_busy(false);
                         }
-                        // undo the optimistic mode switch
+                        // re-sync the view with the last known state
                         let conn = with_state(|s| s.conn.clone());
                         apply_view(ui, &conn);
                     }
@@ -302,12 +301,6 @@ mod app {
             if let Some(req) = with_state(|s| view::primary_request(&s.conn)) {
                 send(&ui, &l, req);
             }
-        });
-        let (w, l) = (ui.as_weak(), Rc::clone(&link));
-        ui.on_mode_selected(move |game| {
-            let Some(ui) = w.upgrade() else { return };
-            let mode = if game { Mode::Game } else { Mode::Normal };
-            send(&ui, &l, Request::SetMode { mode });
         });
         let (w, l) = (ui.as_weak(), Rc::clone(&link));
         ui.on_repair_clicked(move || {

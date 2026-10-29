@@ -7,12 +7,25 @@
 
 use core::ffi::{c_char, c_void};
 use std::ffi::CString;
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use windows_sys::Win32::Foundation::{FreeLibrary, GetLastError, HMODULE};
 use windows_sys::Win32::System::LibraryLoader::{
-    GetProcAddress, LOAD_LIBRARY_SEARCH_APPLICATION_DIR, LoadLibraryExW,
+    GetProcAddress, LOAD_LIBRARY_SEARCH_APPLICATION_DIR, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
+
+/// Admin-only directory holding `WinDivert.dll`/`WinDivert64.sys`, used instead
+/// of the application directory (the single exe extracts its embedded copy to
+/// Program Files). Set once at start-up, before the first [`Api::load`].
+static DLL_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Load WinDivert from `dir` (absolute, writable only by administrators)
+/// instead of the application directory. Only the first call takes effect.
+pub fn set_dll_dir(dir: PathBuf) {
+    let _ = DLL_DIR.set(dir);
+}
 
 /// Opaque WinDivert handle (a Win32 `HANDLE`).
 pub type Handle = *mut c_void;
@@ -220,16 +233,19 @@ impl Api {
     /// Load `WinDivert.dll` from the application directory and resolve all
     /// entry points.
     pub fn load() -> Result<Api, LoadError> {
-        let name = wide("WinDivert.dll");
-        // SAFETY: `name` is a valid NUL-terminated UTF-16 string that outlives
-        // the call; the flag restricts the search to the application directory.
-        let module = unsafe {
-            LoadLibraryExW(
-                name.as_ptr(),
-                std::ptr::null_mut(),
-                LOAD_LIBRARY_SEARCH_APPLICATION_DIR,
-            )
+        let (name, flags) = match DLL_DIR.get() {
+            // Absolute path: load exactly that file (its own directory is the
+            // only extra search location for its dependencies).
+            Some(dir) => (
+                wide(&dir.join("WinDivert.dll").to_string_lossy()),
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32,
+            ),
+            None => (wide("WinDivert.dll"), LOAD_LIBRARY_SEARCH_APPLICATION_DIR),
         };
+        // SAFETY: `name` is a valid NUL-terminated UTF-16 string that outlives
+        // the call; the flags restrict the search to the application directory
+        // or the configured admin-only directory.
+        let module = unsafe { LoadLibraryExW(name.as_ptr(), std::ptr::null_mut(), flags) };
         if module.is_null() {
             // SAFETY: querying the thread's last-error is always sound.
             return Err(LoadError::LibraryNotFound(unsafe { GetLastError() }));

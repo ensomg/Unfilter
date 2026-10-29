@@ -9,9 +9,8 @@
 //! transport (DoH/DoT) to use, and in what order.
 //!
 //! The resolver policy itself is single-threaded (it owns its cache and id
-//! counter), so [`DnsService`] is used from the thread that builds it; the
-//! packet-level port-53 interception loop that will feed it live queries is a
-//! later, Windows-only iteration.
+//! counter), so [`DnsService`] is used from the thread that builds it: the
+//! Windows port-53 interception loop ([`crate::runtime`]) builds its own.
 
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -75,6 +74,19 @@ impl DnsService {
             .resolve(name, QType::A, unix_now())
             .ok()
             .map(|resolved| resolved.addrs)
+    }
+
+    /// Resolve `name`/`qtype` for the port-53 interceptor: the answer to hand
+    /// back to the OS resolver, or `None` when every upstream failed (the
+    /// caller then lets the original query through).
+    pub fn answer(&self, name: &str, qtype: QType) -> Option<crate::dnsproxy::Answer> {
+        let mut resolver = self.resolver.lock().unwrap_or_else(|e| e.into_inner());
+        let resolved = resolver.resolve(name, qtype, unix_now()).ok()?;
+        Some(if resolved.negative {
+            crate::dnsproxy::Answer::NxDomain
+        } else {
+            crate::dnsproxy::Answer::Addrs(resolved.addrs)
+        })
     }
 
     /// Startup health check: resolve a well-known name to confirm at least one

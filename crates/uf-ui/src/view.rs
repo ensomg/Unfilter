@@ -1,7 +1,7 @@
 //! Pure mapping from service state to what the main screen shows (Turkish
 //! copy from the mockup). No slint types, so it is unit-tested directly.
 
-use uf_ipc::{BlockKind, ConnState, Mode, ProtocolError, Request, SiteTest, Status};
+use uf_ipc::{BlockKind, ConnState, ProtocolError, Request, SiteTest, Status};
 
 /// Visual style of the status ring / title.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,9 +56,7 @@ pub struct ViewModel {
     pub button_outline: bool,
     /// Primary button clickable.
     pub button_enabled: bool,
-    /// Game mode selected.
-    pub game_mode: bool,
-    /// Mode switch, Onar, Yeniden tara, Test et usable.
+    /// Onar, Yeniden tara, Test et usable.
     pub controls_enabled: bool,
 }
 
@@ -67,14 +65,6 @@ pub fn format_latency(us: u32) -> String {
     // round half up in integer tenths of a millisecond (no float surprises)
     let tenths = (u64::from(us) + 50) / 100;
     format!("{}.{} ms", tenths / 10, tenths % 10)
-}
-
-/// Label used in the subtitle (`"… · Oyun Mod"`, as in the mockup).
-pub fn mode_word(mode: Mode) -> &'static str {
-    match mode {
-        Mode::Normal => "Normal",
-        Mode::Game => "Oyun",
-    }
 }
 
 /// Builds the main-screen view model.
@@ -93,7 +83,6 @@ pub fn view_for(conn: &Conn) -> ViewModel {
             button: "BAĞLAN",
             button_outline: false,
             button_enabled: false,
-            game_mode: false,
             controls_enabled: false,
         },
         Conn::Waiting => ViewModel {
@@ -103,11 +92,9 @@ pub fn view_for(conn: &Conn) -> ViewModel {
             button: "BAĞLAN",
             button_outline: false,
             button_enabled: false,
-            game_mode: false,
             controls_enabled: false,
         },
         Conn::Online(st) => {
-            let game_mode = st.mode == Mode::Game;
             let base = ViewModel {
                 visual: Visual::Ready,
                 title: "HAZIR",
@@ -115,7 +102,6 @@ pub fn view_for(conn: &Conn) -> ViewModel {
                 button: "BAĞLAN",
                 button_outline: false,
                 button_enabled: true,
-                game_mode,
                 controls_enabled: true,
             };
             match st.state {
@@ -132,10 +118,9 @@ pub fn view_for(conn: &Conn) -> ViewModel {
                     visual: Visual::Connected,
                     title: "BAĞLI",
                     subtitle: format!(
-                        "{} · {} · {} Mod",
+                        "{} · {}",
                         st.strategy.as_deref().unwrap_or("otomatik"),
-                        format_latency(st.added_latency_us),
-                        mode_word(st.mode)
+                        format_latency(st.added_latency_us)
                     ),
                     button: "BAĞLANTIYI KES",
                     button_outline: true,
@@ -288,7 +273,7 @@ mod tests {
             state,
             strategy: Some("split+disorder".into()),
             added_latency_us: 350,
-            mode: Mode::Normal,
+            mode: uf_ipc::Mode::Normal,
         }
     }
 
@@ -321,14 +306,13 @@ mod tests {
     }
 
     #[test]
-    fn connected_view_shows_strategy_latency_mode() {
-        let mut st = status(ConnState::Connected);
-        st.mode = Mode::Game;
+    fn connected_view_shows_strategy_latency() {
+        let st = status(ConnState::Connected);
         let v = view_for(&Conn::Online(st));
         assert_eq!(v.title, "BAĞLI");
         assert_eq!(v.button, "BAĞLANTIYI KES");
-        assert_eq!(v.subtitle, "split+disorder · 0.4 ms · Oyun Mod");
-        assert!(v.game_mode && v.button_outline);
+        assert_eq!(v.subtitle, "split+disorder · 0.4 ms");
+        assert!(v.button_outline);
         let mut st = status(ConnState::Connected);
         st.strategy = None;
         assert!(

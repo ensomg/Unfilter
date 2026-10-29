@@ -118,9 +118,13 @@ Bu repo Windows için bir DPI/sansür-aşımı aracıdır (Rust workspace). Fazl
 - `uf-service/src/dns.rs` (`DnsService`): config upstream'lerini gömülü `PROVIDERS`'a host adından eşler (pinler koddan); resolver canlı tutulur, başlangıçta DNS sağlık kontrolü. Servisteki yinelenen `DotTransport` kaldırıldı.
 - Tek exe: `unfilter.exe` → `--service` / `--tray` / `--ui` (varsayılan tray). `uf-ui`/`uf-tray`/`uf-service` lib'e çevrildi; `crates/unfilter` ikili dağıtır. İkonlar `crates/unfilter/unfilter.rc`'de birleşti.
 
-**Sıradaki gerçek iş (çalışma-zamanı, test makinesi gerekir):**
-1. **Port-53 yakalama döngüsü:** WinDivert ile giden DNS paketlerini yakala → `DnsService::resolve_a` ile çöz → yeniden enjekte et (hot-path; `crates/uf-capture` + orchestrator). DPI bypass'ın fiilen çalışması bunu bekliyor.
-2. **SCM dispatcher:** gerçek Windows servis sarmalayıcısı (`StartServiceCtrlDispatcher`); servis şu an konsol/pipe olarak çalışıyor.
-3. `scripts/bench/{mem,cpu}.ps1`: tek exe'de modlar aynı süreç adını paylaşır; komut satırı (`--service`/`--tray`) ile filtreleme gerekir.
+**F11 (dal `integrate-runtime`) — çalışma zamanı bağlandı** ([`docs/phase-reports/F11-runtime.md`](docs/phase-reports/F11-runtime.md)):
+- `uf-service/src/runtime.rs`: Connect → WinDivert motoru + port-53 yakalama başlar, merdiven canlı HTTPS problarıyla taranır; Disconnect/Fault → yakalama durur (fail-open).
+- `uf-service/src/dnsproxy.rs`: A/AAAA güvenilir DoH/DoT'tan cevaplanır, SVCB/HTTPS boş NOERROR, gerisi olduğu gibi geçer.
+- `uf-service/src/svc.rs`: SCM dispatcher; konsoldan çalıştırılınca ön planda çalışır.
+- `uf-service/src/probe.rs`: gerçek "site test" (DNS/TCP/TLS katmanı + blok türü).
+- `scripts/bench/{mem,cpu}.ps1`: roller (`service`/`tray`) komut satırından ayırt edilir (`roles.ps1`).
 
-**Doğrulama:** `cargo check --workspace --all-targets` uyarısız; `cargo test -p uf-dns -p uf-service --lib` geçiyor. Canlı DPI davranışı test edilmedi (geliştirici ISP'sinde denenemiyor).
+**Sıradaki iş (test makinesi gerekir):** yönetici + WinDivert sürücüsüyle TR ISP'de uçtan uca deneme; pasif monitöre (`record_flow`) motordan RST/timeout sonuçlarını beslemek; DNS döngüsünü çok iş parçacıklı yapmak (şu an seri, önbellek önde).
+
+**Doğrulama:** `cargo clippy --workspace --all-targets` yeni uyarı yok; `cargo test -p uf-service -p uf-dns` geçiyor; `-- --ignored live_` canlı HTTPS probu geçiyor. WinDivert'li canlı DPI davranışı henüz test edilmedi.

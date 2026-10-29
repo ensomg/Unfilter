@@ -4575,6 +4575,7 @@ dependencies = [
 name = "uf-service"
 version = "0.1.0"
 dependencies = [
+ "rustls",
  "serde",
  "serde_json",
  "toml 0.8.23",
@@ -4584,6 +4585,7 @@ dependencies = [
  "uf-fallback",
  "uf-ipc",
  "uf-probe",
+ "webpki-roots",
  "windows-sys 0.59.0",
 ]
 
@@ -4611,10 +4613,12 @@ name = "unfilter"
 version = "0.1.0"
 dependencies = [
  "embed-resource",
+ "uf-capture",
  "uf-ipc",
  "uf-service",
  "uf-tray",
  "uf-ui",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

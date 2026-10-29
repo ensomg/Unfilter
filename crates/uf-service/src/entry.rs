@@ -5,9 +5,9 @@
 //! The control plane lives in [`crate::orchestrator`] (pure, tested);
 //! [`crate::config`] loads `config/default.toml`; [`crate::dns`] builds the live
 //! trusted resolver (DoH/DoT via `uf-dns` against pinned providers); on Windows
-//! [`crate::fingerprint`] identifies the network. A real Windows service still
-//! needs an SCM dispatcher wrapper; invoked from a console this performs start-up
-//! wiring and serves the control plane over the named pipe.
+//! [`crate::fingerprint`] identifies the network; [`crate::runtime`] runs the
+//! packet engine, port-53 interception and strategy scan; [`crate::svc`] is the
+//! SCM wrapper (invoked from a console the same body runs in the foreground).
 //!
 //! The single `unfilter` binary calls [`run`] in `--service` mode.
 
@@ -48,42 +48,32 @@ fn current_fingerprint() -> Fingerprint {
     }
 }
 
-/// Load config, build the control plane, and the trusted DNS resolver.
-fn start_up() -> (Orchestrator, Option<crate::dns::DnsService>) {
-    let (user, default) = config_paths();
-    let cfg = Config::load(&user, &default);
-
-    let cache_path = std::env::var_os("ProgramData")
+fn cache_path() -> PathBuf {
+    std::env::var_os("ProgramData")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Unfilter")
-        .join("profiles.json");
-    let cache = ProfileCache::load(&cache_path);
-
-    // Build the trusted resolver from the configured upstreams (DoH/DoT against
-    // pinned providers). A disabled or unknown-only config yields `None`, which
-    // is non-fatal: the engine still passes traffic through.
-    let dns = if cfg.dns.enabled {
-        crate::dns::DnsService::build(&cfg)
-    } else {
-        None
-    };
-
-    let orch = Orchestrator::new(&cfg, current_fingerprint(), cache);
-    (orch, dns)
+        .join("profiles.json")
 }
 
-/// Run the service: wire up the control plane and resolver, then serve the
-/// tray/UI over the named pipe (blocks until the pipe server stops).
-pub fn run() {
-    let (orch, dns) = start_up();
-    let status = orch.status();
-    eprintln!(
-        "uf-service hazır: durum={:?}, mod={:?}",
-        status.state, status.mode
-    );
+/// Load config and build the control plane.
+fn start_up() -> (Orchestrator, Config) {
+    let (user, default) = config_paths();
+    let cfg = Config::load(&user, &default);
+    let cache = ProfileCache::load(&cache_path());
+    let orch = Orchestrator::new(&cfg, current_fingerprint(), cache);
+    (orch, cfg)
+}
 
-    match &dns {
+/// Log which trusted upstreams are wired and whether one is reachable. The
+/// resolver used for live queries is built by the port-53 interceptor on its
+/// own thread (the resolver policy is single-threaded).
+fn dns_health(cfg: &Config) {
+    if !cfg.dns.enabled {
+        eprintln!("DNS yönlendirme kapalı");
+        return;
+    }
+    match crate::dns::DnsService::build(cfg) {
         Some(dns) => {
             eprintln!("DNS güvenilir upstream'ler: {}", dns.upstreams().join(", "));
             // Bounded by the per-query timeouts; non-fatal either way.
@@ -95,26 +85,56 @@ pub fn run() {
                 );
             }
         }
-        None => eprintln!("DNS yönlendirme kapalı veya tanımlı güvenilir upstream yok"),
+        None => eprintln!("DNS: tanımlı güvenilir upstream yok"),
+    }
+}
+
+/// Run the service: under the SCM when started by it, otherwise in the
+/// foreground (console/development).
+pub fn run() {
+    #[cfg(windows)]
+    crate::svc::dispatch(serve);
+    #[cfg(not(windows))]
+    serve();
+}
+
+/// The service body: wire up the control plane and the data-plane runtime,
+/// then serve the tray/UI over the named pipe (blocks until the pipe stops).
+fn serve() {
+    let (orch, cfg) = start_up();
+    let status = orch.status();
+    eprintln!(
+        "uf-service hazır: durum={:?}, mod={:?}",
+        status.state, status.mode
+    );
+    // Off the start-up path: the pipe (and so the UI) comes up immediately.
+    {
+        let cfg = cfg.clone();
+        std::thread::spawn(move || dns_health(&cfg));
+    }
+    let mut orch = orch;
+    // Started by the double-click launcher: connect right away.
+    if std::env::args().any(|a| a == "--connect") {
+        orch.handle(uf_ipc::Request::Connect);
     }
 
-    // Serve tray/UI clients on the ADR-005 named pipe. This blocks. (Running as
-    // a real Windows service still needs an SCM dispatcher wrapper; invoked from
-    // a console this already serves the control plane. The packet engine — and
-    // the port-53 interception that will feed `dns` — are started on Connect and
-    // need the WinDivert driver + administrator rights.)
+    // The runtime follows the orchestrator: Connect starts the WinDivert
+    // engine + port-53 interception and scans for a working strategy;
+    // Disconnect stops capture (fail-open). Needs the driver + admin rights.
     #[cfg(windows)]
     {
         use std::sync::{Arc, Mutex};
-        // Keep the resolver alive for the whole serve lifetime.
-        let _dns = dns;
         let shared = Arc::new(Mutex::new(orch));
-        if let Err(e) = crate::ipc::serve(uf_ipc::PIPE_NAME, shared) {
-            eprintln!("uf-service pipe sunucusu durdu: {e}");
+        let clients = crate::ipc::Clients::default();
+        crate::runtime::Runtime::new(Arc::clone(&shared), clients.clone(), cfg, cache_path())
+            .spawn();
+        match crate::ipc::serve(uf_ipc::PIPE_NAME, shared, clients) {
+            Ok(()) => eprintln!("uf-service pipe sunucusu kapatıldı"),
+            Err(e) => eprintln!("uf-service pipe sunucusu durdu: {e}"),
         }
     }
     #[cfg(not(windows))]
     {
-        let _ = dns;
+        let _ = (orch, cfg);
     }
 }

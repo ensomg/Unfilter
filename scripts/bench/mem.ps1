@@ -4,7 +4,7 @@
     #1/#2 (docs/perf-budget.md).
 
 .DESCRIPTION
-    Samples the Private Working Set of the uf-service and uf-tray processes over
+    Samples the Private Working Set of the unfilter.exe service and tray processes over
     a time window, reports the maximum, and compares it to the budget.
 
     Target counter: `\Process(<name>)\Working Set - Private` -- the same value
@@ -25,8 +25,8 @@
     default sampling duration.
 
 .PARAMETER Processes
-    Process names (without extension) to measure. Default: uf-service, uf-tray.
-    Note: uf-ui (the window) is intentionally excluded -- the idle/load budget
+    Roles of unfilter.exe to measure (told apart by command line, see
+    roles.ps1). Default: service, tray. Note: the ui role (the window) is intentionally excluded -- the idle/load budget
     is for the window closed.
 
 .PARAMETER DurationSeconds
@@ -47,12 +47,14 @@
 param(
     [ValidateSet('idle', 'load')]
     [string]$Mode = 'idle',
-    [string[]]$Processes = @('uf-service', 'uf-tray'),
+    [ValidateSet('service', 'tray', 'ui')]
+    [string[]]$Processes = @('service', 'tray'),
     [int]$DurationSeconds = 0,
     [double]$IntervalSeconds = 1
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'roles.ps1')
 
 if ($Mode -eq 'idle') {
     $budgetBytes = 25MB
@@ -62,24 +64,25 @@ if ($Mode -eq 'idle') {
     if ($DurationSeconds -le 0) { $DurationSeconds = 600 }
 }
 
-# Private Working Set performance counter. The counter name may be localized;
-# if the English path fails we fall back to Get-Process WorkingSet64.
+# Private Working Set of every unfilter.exe process in a role. The WMI
+# performance class is keyed by PID and its names are not localized.
 function Get-PrivateWorkingSet {
     param([string]$Name)
-    $path = "\Process($Name)\Working Set - Private"
-    try {
-        $sample = Get-Counter -Counter $path -ErrorAction Stop
-        # There may be several instances with the same name; sum them all.
-        return ($sample.CounterSamples | Measure-Object -Property CookedValue -Sum).Sum
-    } catch {
-        # Counter path did not resolve (process gone or localized name):
-        # fall back to Get-Process. WorkingSet64 is slightly larger than the
-        # private working set (it includes shared pages) -- safe as an upper
-        # bound.
-        $procs = Get-Process -Name $Name -ErrorAction SilentlyContinue
-        if (-not $procs) { return $null }
-        return ($procs | Measure-Object -Property WorkingSet64 -Sum).Sum
+    $ids = @(Get-UnfilterPids -Role $Name)
+    if ($ids.Count -eq 0) { return $null }
+    $sum = 0.0
+    foreach ($id in $ids) {
+        $perf = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process `
+            -Filter "IDProcess = $id" -ErrorAction SilentlyContinue
+        if ($perf) {
+            $sum += [double]$perf.WorkingSetPrivate
+        } else {
+            # Fallback: working set is a safe upper bound of the private one.
+            $proc = Get-Process -Id $id -ErrorAction SilentlyContinue
+            if ($proc) { $sum += $proc.WorkingSet64 }
+        }
     }
+    return $sum
 }
 
 Write-Host ("Mem budget: mode={0}, budget={1:N0} MB, duration={2}s, interval={3}s" -f `
@@ -89,8 +92,7 @@ Write-Host ("Processes: {0}" -f ($Processes -join ', '))
 # Verify the processes exist first.
 $running = @{}
 foreach ($p in $Processes) {
-    $found = Get-Process -Name $p -ErrorAction SilentlyContinue
-    $running[$p] = [bool]$found
+    $running[$p] = (@(Get-UnfilterPids -Role $p).Count -gt 0)
 }
 $missing = $Processes | Where-Object { -not $running[$_] }
 if ($missing.Count -eq $Processes.Count) {

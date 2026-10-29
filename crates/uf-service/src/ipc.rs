@@ -11,7 +11,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use uf_ipc::{Event, Request, ServerMessage};
+use uf_ipc::{Event, Request, ResponsePayload, ServerMessage, SiteTest};
 
 use crate::orchestrator::Orchestrator;
 
@@ -30,6 +30,29 @@ impl Dispatcher {
     /// Handle one correlated request, returning the response to send back to the
     /// originating client and any events to broadcast to all clients.
     pub fn on_request(&self, id: u64, request: Request) -> (ServerMessage, Vec<ServerMessage>) {
+        // A site test is a live probe (seconds of network I/O): run it without
+        // holding the orchestrator lock, on this client's own thread.
+        if let Request::TestSite { host } = &request {
+            if live_site_test() && valid_host(host) {
+                let r = crate::probe::https(host, crate::probe::PROBE_TIMEOUT);
+                let via = self
+                    .orch
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .status()
+                    .strategy;
+                let test = SiteTest {
+                    host: host.clone(),
+                    dns_ok: r.dns_ok,
+                    tcp_ok: r.tcp_ok,
+                    tls_ok: r.tls_ok,
+                    block: r.block(),
+                    via: if r.tls_ok { via } else { None },
+                };
+                let payload = ResponsePayload::SiteTest { test };
+                return (ServerMessage::Response { id, payload }, Vec::new());
+            }
+        }
         let (payload, events) = self
             .orch
             .lock()
@@ -41,12 +64,27 @@ impl Dispatcher {
     }
 }
 
+/// Live site tests run in the real service; unit tests keep the pure path.
+fn live_site_test() -> bool {
+    !cfg!(test)
+}
+
+/// A plausible DNS host name (bounded, `[A-Za-z0-9.-]`), so a client cannot
+/// make the probe resolve or connect to anything exotic.
+fn valid_host(host: &str) -> bool {
+    !host.is_empty()
+        && host.len() <= 253
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+}
+
 fn wrap_event(event: Event) -> ServerMessage {
     ServerMessage::Event { event }
 }
 
 #[cfg(windows)]
-pub use win::serve;
+pub use win::{Clients, serve};
 
 #[cfg(windows)]
 mod win {
@@ -64,9 +102,10 @@ mod win {
     /// events never interleave on the wire.
     type Writer = Arc<Mutex<PipeStream>>;
 
-    /// The set of connected clients' writers, for broadcasting events.
+    /// The set of connected clients' writers, for broadcasting events. Shared
+    /// with the runtime so scan progress reaches every client.
     #[derive(Clone, Default)]
-    struct Clients(Arc<Mutex<Vec<Writer>>>);
+    pub struct Clients(Arc<Mutex<Vec<Writer>>>);
 
     impl Clients {
         fn add(&self, w: Writer) {
@@ -74,7 +113,7 @@ mod win {
         }
 
         /// Write a frame to every client, dropping any that error.
-        fn broadcast(&self, msg: &ServerMessage) {
+        pub fn broadcast(&self, msg: &ServerMessage) {
             let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
             guard.retain(|w| {
                 let mut s = w.lock().unwrap_or_else(|e| e.into_inner());
@@ -92,12 +131,25 @@ mod win {
     }
 
     /// Run the pipe server until the returned-from shutdown handle fires. Blocks
-    /// the calling thread. `orch` is shared with any background worker.
-    pub fn serve(name: &str, orch: Arc<Mutex<Orchestrator>>) -> std::io::Result<()> {
+    /// the calling thread. `orch` and `clients` are shared with the runtime.
+    pub fn serve(
+        name: &str,
+        orch: Arc<Mutex<Orchestrator>>,
+        clients: Clients,
+    ) -> std::io::Result<()> {
         let mut server = PipeServer::bind(name)?;
-        let clients = Clients::default();
         loop {
-            match server.accept()? {
+            let accepted = match server.accept() {
+                Ok(a) => a,
+                // A client that vanished mid-connect (or any per-instance
+                // error) must never take the control plane down: log, retry.
+                Err(e) => {
+                    eprintln!("uf-service: pipe accept hatası (yeniden deneniyor): {e}");
+                    thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                }
+            };
+            match accepted {
                 Some(stream) => {
                     let dispatcher = Dispatcher::new(Arc::clone(&orch));
                     let client_set = clients.clone();

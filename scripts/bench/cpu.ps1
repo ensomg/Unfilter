@@ -4,8 +4,9 @@
     (docs/perf-budget.md).
 
 .DESCRIPTION
-    Samples the `% Processor Time` counter of uf-service and uf-tray with
-    `typeperf`, averages it, and normalizes by the core count.
+    Samples the CPU time of the unfilter.exe service and tray processes (told
+    apart by command line, see roles.ps1), averages it, and normalizes by the
+    core count.
 
     `\Process(<name>)\% Processor Time` is the sum across all cores and tops out
     at 100 * N (N = logical cores). The section 2 threshold is expressed as a
@@ -23,7 +24,7 @@
     'idle' (default, 0.3%) or 'active' (3%).
 
 .PARAMETER Processes
-    Process names (without extension) to measure. Default: uf-service, uf-tray.
+    Roles of unfilter.exe to measure. Default: service, tray.
 
 .PARAMETER DurationSeconds
     Total sampling duration. Default: idle=300, active=120.
@@ -43,12 +44,14 @@
 param(
     [ValidateSet('idle', 'active')]
     [string]$Mode = 'idle',
-    [string[]]$Processes = @('uf-service', 'uf-tray'),
+    [ValidateSet('service', 'tray', 'ui')]
+    [string[]]$Processes = @('service', 'tray'),
     [int]$DurationSeconds = 0,
     [int]$IntervalSeconds = 1
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'roles.ps1')
 
 if ($Mode -eq 'idle') {
     $budgetPercent = 0.3
@@ -68,7 +71,7 @@ Write-Host ("Processes: {0}" -f ($Processes -join ', '))
 # Process check -- nothing to measure if none are running.
 $anyRunning = $false
 foreach ($p in $Processes) {
-    if (Get-Process -Name $p -ErrorAction SilentlyContinue) { $anyRunning = $true }
+    if (@(Get-UnfilterPids -Role $p).Count -gt 0) { $anyRunning = $true }
 }
 if (-not $anyRunning) {
     Write-Warning ("No process running ({0}). Cannot measure CPU before the service is started." -f ($Processes -join ', '))
@@ -76,40 +79,7 @@ if (-not $anyRunning) {
     exit 2
 }
 
-# typeperf counter paths. '% Processor Time' is localized on non-English
-# Windows (e.g. Turkish), where typeperf/Get-Counter by English name fail; the
-# robust fallback below reads CPU time from Get-Process instead, which needs no
-# counter names.
-$counters = $Processes | ForEach-Object { "\Process($_)\% Processor Time" }
-
-function Measure-WithTypeperf {
-    param([string[]]$Counters, [int]$Samples, [int]$Interval)
-    $tpArgs = @()
-    foreach ($c in $Counters) { $tpArgs += "`"$c`"" }
-    $tpArgs += @('-si', $Interval, '-sc', $Samples)
-    # typeperf writes CSV: first line is the header, following lines are
-    # samples. The first column is a timestamp. A missing process reads as ""
-    # or 0.
-    $raw = & typeperf @tpArgs 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $raw) { return $null }
-    $lines = $raw | Where-Object { $_ -match '^"' }
-    if ($lines.Count -lt 2) { return $null }
-    $rowTotals = @()
-    foreach ($line in ($lines | Select-Object -Skip 1)) {
-        $cells = $line -split '","' | ForEach-Object { $_.Trim('"') }
-        # cells[0] = timestamp; the rest are counter values.
-        $sum = 0.0
-        for ($i = 1; $i -lt $cells.Count; $i++) {
-            $val = 0.0
-            if ([double]::TryParse($cells[$i], [ref]$val)) { $sum += $val }
-        }
-        $rowTotals += $sum
-    }
-    if ($rowTotals.Count -eq 0) { return $null }
-    return ($rowTotals | Measure-Object -Average -Maximum)
-}
-
-# Locale-independent fallback: sample the summed CPU time (TotalProcessorTime,
+# Locale-independent: sample the summed CPU time (TotalProcessorTime,
 # in seconds) of the matching processes and divide the delta by the elapsed
 # wall-clock time. That ratio * 100 equals the `% Processor Time` counter --
 # core-equivalent percent, 0..100*N -- with no counter-name lookup.
@@ -119,7 +89,9 @@ function Measure-WithProcessCpu {
         param([string[]]$Names)
         $sum = 0.0
         foreach ($n in $Names) {
-            $procs = Get-Process -Name $n -ErrorAction SilentlyContinue
+            $ids = @(Get-UnfilterPids -Role $n)
+            if ($ids.Count -eq 0) { continue }
+            $procs = Get-Process -Id $ids -ErrorAction SilentlyContinue
             if ($procs) {
                 $sum += ($procs | Measure-Object -Property CPU -Sum).Sum
             }
@@ -144,11 +116,9 @@ function Measure-WithProcessCpu {
     return ($rowTotals | Measure-Object -Average -Maximum)
 }
 
-$stats = Measure-WithTypeperf -Counters $counters -Samples $sampleCount -Interval $IntervalSeconds
-if ($null -eq $stats) {
-    Write-Warning "typeperf unavailable (localized counters?) -- using Get-Process CPU time."
-    $stats = Measure-WithProcessCpu -Names $Processes -Samples $sampleCount -Interval $IntervalSeconds
-}
+# Per-name counters (typeperf) cannot tell the roles apart -- every mode is
+# unfilter.exe -- so sample CPU time per PID.
+$stats = Measure-WithProcessCpu -Names $Processes -Samples $sampleCount -Interval $IntervalSeconds
 if ($null -eq $stats) {
     Write-Warning "Could not read CPU counters."
     Write-Host "RESULT: pending (full engine / install)."

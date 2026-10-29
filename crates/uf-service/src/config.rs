@@ -38,18 +38,16 @@ pub struct General {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
-    /// Normal.
+    /// Normal. (`"game"` from older configs is accepted as Normal.)
     #[default]
+    #[serde(alias = "game")]
     Normal,
-    /// Game mode: prioritise Discord / game UDP latency.
-    Game,
 }
 
 impl From<Mode> for uf_ipc::Mode {
     fn from(m: Mode) -> Self {
         match m {
             Mode::Normal => uf_ipc::Mode::Normal,
-            Mode::Game => uf_ipc::Mode::Game,
         }
     }
 }
@@ -225,7 +223,7 @@ mod tests {
     #[test]
     fn partial_file_fills_gaps_with_defaults() {
         let c = Config::parse("[general]\nmode = \"game\"\n").unwrap();
-        assert_eq!(c.general.mode, Mode::Game);
+        assert_eq!(c.general.mode, Mode::Normal); // legacy "game" → Normal
         assert!(c.general.autostart); // default kept
         assert_eq!(c.dns.cache_entries, 4096); // default kept
     }

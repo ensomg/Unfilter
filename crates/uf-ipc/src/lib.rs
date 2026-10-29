@@ -30,14 +30,14 @@ pub enum ConnState {
     Fault,
 }
 
-/// Operating mode toggle on the main screen.
+/// Operating mode. Only `Normal` remains (the game mode was removed); an
+/// older peer's `"game"` still parses, as `Normal`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     /// Normal.
+    #[serde(alias = "game")]
     Normal,
-    /// Game mode: prioritises Discord / game UDP latency.
-    Game,
 }
 
 /// A request from the UI/tray to the service. Each is wrapped in
@@ -264,7 +264,7 @@ mod tests {
                     state: ConnState::Connected,
                     strategy: Some("split+fake_badsum".into()),
                     added_latency_us: 350,
-                    mode: Mode::Game,
+                    mode: Mode::Normal,
                 },
             },
         };

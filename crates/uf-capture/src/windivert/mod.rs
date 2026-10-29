@@ -20,7 +20,7 @@ use ffi::{
 use uf_core::error::{Error, Result};
 use uf_core::io::{Direction, PacketBuf, PacketIO, PacketMeta};
 
-pub use ffi::ShutdownToken;
+pub use ffi::{ShutdownToken, set_dll_dir};
 
 /// Default capture filter (WinDivert filter language): outbound TCP 80/443,
 /// UDP 443 (QUIC) and 53 (DNS), plus the high UDP range Discord voice uses.
