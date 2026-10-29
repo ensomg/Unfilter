@@ -5,6 +5,7 @@
 **Karar:**
 - `uf-ui`: `slint`, `renderer-software` + `backend-winit`; femtovg/skia ve OpenGL kapalı. Pencere 360×620 sabit, DWM koyu başlık çubuğu `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)`.
 - `uf-tray`: slint kullanmaz. `windows-sys` ile `Shell_NotifyIconW` + gizli mesaj penceresi. Hedef < 4 MB RAM, < 300 KB exe.
+- Not: `uf-tray` ve `uf-ui` artık tek dağıtım ikilisi `unfilter.exe`'nin `--tray` ve `--ui` modlarıdır; her mod ayrı süreç olarak çalışır. Yukarıdaki kararlar ve hedefler değişmedi.
 
 **Gerekçe:**
 - Tray her zaman açık; GUI toolkit yüklemek boşta RAM bütçesini (§2: tray ≤ 8 MB) boşa harcar.

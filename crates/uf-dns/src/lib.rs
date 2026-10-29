@@ -23,10 +23,12 @@ pub mod cache;
 pub mod detect;
 pub mod message;
 pub mod resolver;
+pub mod transport;
 pub mod upstream;
 
 pub use cache::{Cache, CacheEntry};
 pub use detect::{PoisonConfig, Verdict};
 pub use message::{DnsMessage, QType, Record};
 pub use resolver::{Resolver, Transport, TransportError};
+pub use transport::{Doh, Dot};
 pub use upstream::{PROVIDERS, Provider};

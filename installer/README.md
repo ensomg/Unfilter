@@ -11,7 +11,7 @@ Derleme (Inno Setup 6 gerekir, `iscc` PATH'te):
 
 ```powershell
 # Önkoşullar: release ikilileri ve WinDivert dosyaları yerinde olmalı
-cargo build --release --workspace
+cargo build --release -p unfilter
 powershell -File scripts\fetch-windivert.ps1        # assets\windivert\ doldurulur
 
 iscc installer\unfilter.iss                         # -> dist\Unfilter-Setup-<sürüm>.exe
@@ -22,10 +22,8 @@ powershell -File scripts\sign.ps1 -Thumbprint <...> # (yayın için) imzala
 
 ```
 %ProgramFiles%\Unfilter\
-  uf-service.exe          # yükseltilmiş Windows servisi (motor)
-  uf-tray.exe             # kullanıcı yetkisinde tray
-  uf-ui.exe               # kullanıcı yetkisinde arayüz
-  WinDivert.dll           # exe'lerin YANINDA (LOAD_LIBRARY_SEARCH_APPLICATION_DIR, ADR 002)
+  unfilter.exe            # tek ikili: --service (yükseltilmiş servis), --tray, --ui
+  WinDivert.dll           # exe'nin YANINDA (LOAD_LIBRARY_SEARCH_APPLICATION_DIR, ADR 002)
   WinDivert64.sys
   config\default.toml     # varsayılan sıfır-yapılandırma profili
   LICENSE, README.md
@@ -36,10 +34,10 @@ powershell -File scripts\sign.ps1 -Thumbprint <...> # (yayın için) imzala
 
 | Adım | Nasıl |
 |---|---|
-| Servis kaydı | `sc create Unfilter binPath= "...\uf-service.exe" start= auto` |
+| Servis kaydı | `sc create Unfilter binPath= "\"...\unfilter.exe\" --service" start= auto` |
 | Recovery politikası (§6.4) | `sc failure Unfilter reset= 86400 actions= restart/5000/restart/5000/restart/5000` |
 | Güvenlik duvarı (giden DoH/DoT) | `netsh advfirewall firewall add rule name="Unfilter" dir=out ...` |
-| Tray oturum açılışında | HKLM `...\Run` değeri `Unfilter Tray` (uninsdeletevalue) |
+| Tray oturum açılışında | HKLM `...\Run` değeri `Unfilter Tray` = `"...\unfilter.exe" --tray` (uninsdeletevalue) |
 
 ### Kaldırmanın yaptıkları (temiz kaldırma, §2)
 
@@ -52,7 +50,7 @@ powershell -File scripts\sign.ps1 -Thumbprint <...> # (yayın için) imzala
 
 Doğrulama: `scripts\verify-clean-uninstall.ps1` (kaldırma sonrası, yönetici).
 
-> Not: WinDivert sürücü servisi, `uf-service` ilk `WinDivertOpen` çağrısında
+> Not: WinDivert sürücü servisi, `unfilter.exe --service` ilk `WinDivertOpen` çağrısında
 > çalışma zamanında oluşur (`WinDivert` adıyla); bu yüzden kaldırıcı onu ayrıca
 > durdurup siler.
 

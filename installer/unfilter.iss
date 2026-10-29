@@ -54,7 +54,7 @@ WizardStyle=modern
 OutputDir=..\dist
 OutputBaseFilename=Unfilter-Setup-{#AppVersion}
 UninstallDisplayName={#AppName}
-UninstallDisplayIcon={app}\uf-ui.exe
+UninstallDisplayIcon={app}\unfilter.exe
 ; Kaldırmada ProgramData izlerini de sil.
 LicenseFile=..\LICENSE
 ; SmartScreen itibarı için kurucu imzalanmalı (bkz. scripts\sign.ps1, §5.9).
@@ -69,11 +69,9 @@ Name: "startmenuicon"; Description: "Başlat menüsü kısayolu"; GroupDescripti
 Name: "trayatlogin"; Description: "Oturum açılışında arka plan simgesini (tray) başlat"; GroupDescription: "Başlangıç:"
 
 [Files]
-; Üç çalıştırılabilir.
-Source: "{#BinDir}\uf-service.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BinDir}\uf-tray.exe";    DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BinDir}\uf-ui.exe";      DestDir: "{app}"; Flags: ignoreversion
-; WinDivert: exe'lerin YANINA kopyalanır ki yükleyici
+; Tek çalıştırılabilir (--service / --tray / --ui bayraklarıyla modlar).
+Source: "{#BinDir}\unfilter.exe"; DestDir: "{app}"; Flags: ignoreversion
+; WinDivert: exe'nin YANINA kopyalanır ki yükleyici
 ; LOAD_LIBRARY_SEARCH_APPLICATION_DIR ile bulsun (ADR 002).
 Source: "{#AssetDir}\WinDivert.dll";   DestDir: "{app}"; Flags: ignoreversion
 Source: "{#AssetDir}\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
@@ -87,19 +85,19 @@ Source: "..\README.md";              DestDir: "{app}"; Flags: ignoreversion isre
 Name: "{commonappdata}\{#AppName}"
 
 [Icons]
-Name: "{group}\Unfilter";             Filename: "{app}\uf-ui.exe"; Tasks: startmenuicon
+Name: "{group}\Unfilter";             Filename: "{app}\unfilter.exe"; Parameters: "--ui"; Tasks: startmenuicon
 Name: "{group}\Unfilter'ı Kaldır";    Filename: "{uninstallexe}"
 
 [Registry]
 ; Tray'i oturum açılışında başlat (per-machine Run anahtarı; kaldırmada silinir).
 Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-    ValueType: string; ValueName: "{#TrayRunValue}"; ValueData: """{app}\uf-tray.exe"""; \
+    ValueType: string; ValueName: "{#TrayRunValue}"; ValueData: """{app}\unfilter.exe"" --tray"; \
     Flags: uninsdeletevalue; Tasks: trayatlogin
 
 [Run]
 ; 1) Servisi oluştur (otomatik başlangıç, LocalSystem — WinDivert sürücüsü SYSTEM ister).
 Filename: "{sys}\sc.exe"; \
-    Parameters: "create {#ServiceName} binPath= ""{app}\uf-service.exe"" start= auto DisplayName= ""{#ServiceDisplay}"""; \
+    Parameters: "create {#ServiceName} binPath= ""\""{app}\unfilter.exe\"" --service"" start= auto DisplayName= ""{#ServiceDisplay}"""; \
     Flags: runhidden; StatusMsg: "Servis kaydediliyor..."
 ; 2) Açıklama.
 Filename: "{sys}\sc.exe"; \
@@ -111,20 +109,20 @@ Filename: "{sys}\sc.exe"; \
     Flags: runhidden
 ; 4) Güvenlik duvarı: servisin giden DoH/DoT bağlantılarına izin (kısıtlı profillerde gerekebilir).
 Filename: "{sys}\netsh.exe"; \
-    Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=out action=allow program=""{app}\uf-service.exe"" enable=yes profile=any"; \
+    Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=out action=allow program=""{app}\unfilter.exe"" enable=yes profile=any"; \
     Flags: runhidden; StatusMsg: "Güvenlik duvarı kuralı ekleniyor..."
 ; 5) Servisi başlat (hata ölümcül değildir; yönetici sonra başlatabilir).
 Filename: "{sys}\sc.exe"; \
     Parameters: "start {#ServiceName}"; \
     Flags: runhidden; StatusMsg: "Servis başlatılıyor..."
 ; 6) Tray'i hemen başlat (kullanıcı yetkisinde, yükseltilmeden).
-Filename: "{app}\uf-tray.exe"; \
+Filename: "{app}\unfilter.exe"; Parameters: "--tray"; \
     Description: "Unfilter'ı şimdi başlat"; \
     Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
 ; Sıra: servisleri ÖNCE durdur/sil (dosyalar silinmeden önce çalışır), sonra duvar kuralı.
-; WinDivert sürücü servisi, uf-service ilk kez WinDivertOpen çağırınca OLUŞUR;
+; WinDivert sürücü servisi, unfilter.exe --service ilk kez WinDivertOpen çağırınca OLUŞUR;
 ; bu yüzden kaldırmada ayrıca durdurup siliyoruz (varsa).
 Filename: "{sys}\sc.exe"; Parameters: "stop {#ServiceName}";    Flags: runhidden; RunOnceId: "StopSvc"
 Filename: "{sys}\sc.exe"; Parameters: "delete {#ServiceName}";  Flags: runhidden; RunOnceId: "DelSvc"

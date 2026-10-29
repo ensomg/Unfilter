@@ -4,7 +4,9 @@
 //! threads); every service message is marshalled to the UI thread with
 //! `upgrade_in_event_loop`. Nothing polls: the only timers are the ~3 s
 //! opening animation (stopped when done) and the one-shot toast timer.
-#![cfg_attr(not(test), windows_subsystem = "windows")]
+//!
+//! This is a library: the single `unfilter` binary runs it in `--ui` mode. The
+//! `windows` subsystem is set by that binary, not here.
 
 mod splash;
 mod view;
@@ -343,14 +345,17 @@ mod app {
     }
 }
 
+/// Run the settings/status window. Returns when the window is closed.
 #[cfg(windows)]
-fn main() -> Result<(), slint::PlatformError> {
+pub fn run() -> Result<(), slint::PlatformError> {
     app::run()
 }
 
+/// Non-Windows stub: the UI only runs on Windows.
 #[cfg(not(windows))]
-fn main() {
+pub fn run() -> Result<(), slint::PlatformError> {
     eprintln!("uf-ui only runs on Windows");
+    Ok(())
 }
 
 #[cfg(all(test, windows))]

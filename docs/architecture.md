@@ -28,6 +28,10 @@ Durum: Faz 0 (taslak, gate review ile onaylanır). Kaynak gereksinimler: master 
                          └─────────┘
 ```
 
+Dağıtımda tek ikili vardır: `unfilter.exe`. Mod komut satırı bayrağıyla seçilir:
+`--service` (uf-service, yükseltilmiş), `--tray` (uf-tray, oturum açılışında başlar)
+ve `--ui` (uf-ui, tray tarafından açılır). Yukarıdaki kutular crate'leri gösterir.
+
 Kurallar:
 - `uf-core` yalnızca `core`/`std` ve `serde` kullanır. OS çağrısı, `windows-sys`, `tokio` yasak. CI bunu `scripts/check-core-deps.ps1` ile zorlar.
 - `PacketIO` trait'i `uf-core::io` içinde tanımlıdır; `uf-capture` uygular ve re-export eder (varsayım V1). Böylece core, capture'a bağımlı olmaz ve Linux (nfqueue/eBPF), macOS (pf/NetworkExtension), Android (VpnService) adaptörleri yalnızca yeni bir `PacketIO` impl'i olarak eklenir.
@@ -90,8 +94,8 @@ Observe ──(ilk payload)──▶ Classify ──(engelli hedef / probe karar
 
 ## 7. Yetki ayrımı ve IPC
 
-- `uf-service`: Windows servisi. WinDivert sürücüsüne erişim yönetici/SYSTEM ister; servis başlarken ihtiyaç duymadığı ayrıcalıkları (`SeDebugPrivilege` vb.) düşürür. Ayrıntılı inceleme Faz 6 (Opus).
-- `uf-tray`, `uf-ui`: kullanıcı yetkisinde çalışır, asla yükseltilmez.
+- `uf-service` (`unfilter.exe --service`): Windows servisi. WinDivert sürücüsüne erişim yönetici/SYSTEM ister; servis başlarken ihtiyaç duymadığı ayrıcalıkları (`SeDebugPrivilege` vb.) düşürür. Ayrıntılı inceleme Faz 6 (Opus).
+- `uf-tray` (`unfilter.exe --tray`), `uf-ui` (`unfilter.exe --ui`): kullanıcı yetkisinde çalışır, asla yükseltilmez.
 - Kanal: `\\.\pipe\unfilter`, DACL yalnızca SYSTEM + etkileşimli oturum sahibine izin verir; `PIPE_REJECT_REMOTE_CLIENTS`.
 - Protokol: satır sonuyla ayrılmış JSON-RPC benzeri mesajlar, `uf-ipc::PROTOCOL_VERSION` ilk el sıkışmada karşılaştırılır.
 

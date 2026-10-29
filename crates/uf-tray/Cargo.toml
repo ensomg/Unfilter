@@ -21,8 +21,5 @@ windows-sys = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
-[build-dependencies]
-embed-resource = { workspace = true }
-
 [lints]
 workspace = true

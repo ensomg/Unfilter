@@ -66,9 +66,7 @@ Write-Host "signtool: $signtool"
 # --- Resolve the file list ----------------------------------------------------
 if (-not $Files -or $Files.Count -eq 0) {
     $Files = @(
-        (Join-Path $ReleaseDir 'uf-service.exe'),
-        (Join-Path $ReleaseDir 'uf-tray.exe'),
-        (Join-Path $ReleaseDir 'uf-ui.exe')
+        (Join-Path $ReleaseDir 'unfilter.exe')
     )
     # Installer (name set in installer\unfilter.iss: OutputBaseFilename).
     if (Test-Path -LiteralPath $DistDir) {

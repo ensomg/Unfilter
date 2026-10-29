@@ -4,18 +4,19 @@
 //!
 //! - [`config`]: `config/default.toml` schema and load order.
 //! - [`orchestrator`]: the pure control-plane state machine and strategy policy.
-//! - [`transport`] (feature `live-tls`): the live DoT upstream (rustls + ring).
+//! - [`dns`]: the live trusted resolver (DoH/DoT via `uf-dns`), built from the
+//!   configured upstreams against embedded, pinned providers.
 //! - [`fingerprint`] (Windows): the network fingerprint source.
 
 pub mod config;
+pub mod dns;
+pub mod entry;
 pub mod ipc;
 pub mod orchestrator;
-
-#[cfg(feature = "live-tls")]
-pub mod transport;
 
 #[cfg(windows)]
 pub mod fingerprint;
 
 pub use config::Config;
+pub use entry::run;
 pub use orchestrator::Orchestrator;

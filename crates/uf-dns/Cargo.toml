@@ -10,6 +10,8 @@ description = "Local DoH/DoT resolver and DNS poisoning detection"
 [dependencies]
 uf-core = { workspace = true }
 serde = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [lints]
 workspace = true
