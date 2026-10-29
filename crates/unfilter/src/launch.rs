@@ -280,5 +280,23 @@ pub fn run_app() {
         );
     }
     let _ = spawn(&["--ui"]);
+    if is_elevated() {
+        auto_update();
+    }
     uf_tray::run();
+}
+
+/// Elevated app: install signed releases in the background (they apply on the
+/// next launch). Checks shortly after start-up, then twice a day.
+fn auto_update() {
+    uf_update::apply::cleanup();
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(30));
+        loop {
+            if let Err(e) = uf_update::update() {
+                eprintln!("güncelleme: {e}");
+            }
+            std::thread::sleep(Duration::from_secs(12 * 3600));
+        }
+    });
 }

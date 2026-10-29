@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.1.0-beta.1"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
@@ -20,12 +20,14 @@ uf-ipc = { path = "crates/uf-ipc" }
 uf-service = { path = "crates/uf-service" }
 uf-ui = { path = "crates/uf-ui" }
 uf-tray = { path = "crates/uf-tray" }
+uf-update = { path = "crates/uf-update" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 rtrb = "0.3.2"
 tokio = { version = "1.45.1", default-features = false }
 rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1.0"
+ring = "0.17.14"
 windows-sys = "0.59.0"
 slint = { version = "1.11.0", default-features = false }
 criterion = { version = "0.6.0", default-features = false }
