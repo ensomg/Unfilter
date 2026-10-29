@@ -1,6 +1,6 @@
 param(
     [string]$Target = "target/release",
-    [long]$BudgetBytes = 8MB
+    [long]$BudgetBytes = 12MB
 )
 
 $ErrorActionPreference = 'Stop'

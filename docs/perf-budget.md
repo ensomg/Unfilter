@@ -10,7 +10,7 @@ Her kısıt (master prompt §2) için: nasıl ölçülür, hangi araçla, eşik,
 | 4 | Boşta CPU | < %0.3 | `typeperf "\Process(unfilter*)\% Processor Time"`, 5 dk ortalama, çekirdek sayısına normalize | Faz 8 |
 | 5 | Aktif trafikte CPU | < %3 tek çekirdek @ 1 Gbit | Sentetik replay (WinDivert loopback) + gerçek iperf3 | Faz 8 |
 | 6 | Eklenen gecikme | ort. < 1 ms; bypass'sız akışta ~0 | Motor içi histogram (capture→inject), p50/p99/max; ayrıca criterion mikro-benchmark | CI (micro) + Faz 8 |
-| 7 | Dağıtım boyutu | ≤ 8 MB | `scripts/check-size.ps1` (exe'ler + WinDivert + varsayılan config) | CI |
+| 7 | Dağıtım boyutu | ≤ 12 MB (tek exe: Slint UI + rustls gömülü; eski hedef 8 MB) | `scripts/check-size.ps1` (exe'ler + WinDivert + varsayılan config) | CI |
 | 8 | Sıfır kullanıcı ayarı | — | Temiz VM'de kur → 10 sn içinde engelli site açılıyor (F5) | Faz 5 + 9 |
 | 9 | Telemetri yok | 0 beklenmeyen bağlantı | Probe hedef listesi dışında giden bağlantı yok (ETW / Wireshark filtre) | Faz 8 |
 | 10 | Fail-open | İnternet kesilmez | Servis `taskkill /f` ile öldürülür; 1 sn içinde ping/HTTPS sürüyor | Faz 1 + 8 |
