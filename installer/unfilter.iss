@@ -18,7 +18,7 @@
 ; scripts\verify-clean-uninstall.ps1 bunu doğrular.
 
 #define AppName "Unfilter"
-#define AppVersion "0.1.0"
+#define AppVersion "1.0.0"
 #define AppPublisher "Unfilter"
 #define AppURL "https://github.com/ensomg/Unfilter"
 #define ServiceName "Unfilter"

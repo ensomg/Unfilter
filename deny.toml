@@ -22,6 +22,8 @@ allow = [
     "CDLA-Permissive-2.0",
     # slint UI toolkit (ADR 004), used royalty-free; "Made with Slint" attributed.
     "LicenseRef-Slint-Royalty-free-2.0",
+    # Boost Software License (clipboard-win, error-code via slint's winit backend).
+    "BSL-1.0",
 ]
 confidence-threshold = 0.9
 
