@@ -72,7 +72,7 @@ pub fn view_for(conn: &Conn) -> ViewModel {
     match conn {
         Conn::Offline(why) => ViewModel {
             visual: Visual::Offline,
-            title: "SERVİS YOK",
+            title: "Servis yok",
             subtitle: match why {
                 Offline::NotRunning => "Unfilter servisi çalışmıyor. Yeniden deneniyor…".into(),
                 Offline::Lost => "Servis bağlantısı koptu. Yeniden bağlanılıyor…".into(),
@@ -80,16 +80,16 @@ pub fn view_for(conn: &Conn) -> ViewModel {
                     format!("Servis sürümü uyumsuz (protokol {v}). Unfilter'ı güncelleyin.")
                 }
             },
-            button: "BAĞLAN",
+            button: "Bağlan",
             button_outline: false,
             button_enabled: false,
             controls_enabled: false,
         },
         Conn::Waiting => ViewModel {
             visual: Visual::Ready,
-            title: "HAZIR",
+            title: "Hazır",
             subtitle: "Durum alınıyor…".into(),
-            button: "BAĞLAN",
+            button: "Bağlan",
             button_outline: false,
             button_enabled: false,
             controls_enabled: false,
@@ -97,9 +97,9 @@ pub fn view_for(conn: &Conn) -> ViewModel {
         Conn::Online(st) => {
             let base = ViewModel {
                 visual: Visual::Ready,
-                title: "HAZIR",
+                title: "Hazır",
                 subtitle: "Engelleri aşmak için bağlan.".into(),
-                button: "BAĞLAN",
+                button: "Bağlan",
                 button_outline: false,
                 button_enabled: true,
                 controls_enabled: true,
@@ -108,27 +108,27 @@ pub fn view_for(conn: &Conn) -> ViewModel {
                 ConnState::Ready => base,
                 ConnState::Scanning => ViewModel {
                     visual: Visual::Scanning,
-                    title: "TARANIYOR",
+                    title: "Taranıyor",
                     subtitle: "Ağına uygun yöntem seçiliyor…".into(),
-                    button: "İPTAL",
+                    button: "İptal",
                     button_outline: true,
                     ..base
                 },
                 ConnState::Connected => ViewModel {
                     visual: Visual::Connected,
-                    title: "BAĞLI",
+                    title: "Bağlı",
                     subtitle: format!(
                         "{} · {}",
                         st.strategy.as_deref().unwrap_or("otomatik"),
                         format_latency(st.added_latency_us)
                     ),
-                    button: "BAĞLANTIYI KES",
+                    button: "Bağlantıyı kes",
                     button_outline: true,
                     ..base
                 },
                 ConnState::Fault => ViewModel {
                     visual: Visual::Fault,
-                    title: "HATA",
+                    title: "Hata",
                     subtitle: "Sürücü veya servis sorunu. Onar'ı deneyin.".into(),
                     ..base
                 },
@@ -289,7 +289,7 @@ mod tests {
         let v = view_for(&Conn::Online(status(ConnState::Ready)));
         assert_eq!(
             (v.visual, v.title, v.button),
-            (Visual::Ready, "HAZIR", "BAĞLAN")
+            (Visual::Ready, "Hazır", "Bağlan")
         );
         assert_eq!(v.subtitle, "Engelleri aşmak için bağlan.");
         assert!(v.button_enabled && !v.button_outline && v.controls_enabled);
@@ -300,7 +300,7 @@ mod tests {
         let v = view_for(&Conn::Online(status(ConnState::Scanning)));
         assert_eq!(
             (v.visual, v.title, v.button),
-            (Visual::Scanning, "TARANIYOR", "İPTAL")
+            (Visual::Scanning, "Taranıyor", "İptal")
         );
         assert!(v.button_outline);
     }
@@ -309,8 +309,8 @@ mod tests {
     fn connected_view_shows_strategy_latency() {
         let st = status(ConnState::Connected);
         let v = view_for(&Conn::Online(st));
-        assert_eq!(v.title, "BAĞLI");
-        assert_eq!(v.button, "BAĞLANTIYI KES");
+        assert_eq!(v.title, "Bağlı");
+        assert_eq!(v.button, "Bağlantıyı kes");
         assert_eq!(v.subtitle, "split+disorder · 0.4 ms");
         assert!(v.button_outline);
         let mut st = status(ConnState::Connected);
@@ -326,7 +326,7 @@ mod tests {
     fn fault_view_allows_connect() {
         let c = Conn::Online(status(ConnState::Fault));
         let v = view_for(&c);
-        assert_eq!((v.visual, v.title), (Visual::Fault, "HATA"));
+        assert_eq!((v.visual, v.title), (Visual::Fault, "Hata"));
         assert_eq!(primary_request(&c), Some(Request::Connect));
     }
 

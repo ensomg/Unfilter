@@ -4,6 +4,8 @@
 //! - `--service` : the privileged background that serves the control-plane pipe.
 //! - `--tray`    : the always-on notification-area icon (installer autostart).
 //! - `--ui`      : the settings/status window (launched by the tray on demand).
+//! - `--update`  : install the latest signed GitHub release, then exit
+//!   (the window starts it through UAC; see `uf_update`).
 //! - no flag     : double-click start-up ([`launch`]): elevate, start the
 //!   service as a tied child process, open the window and run the tray.
 //!
@@ -22,6 +24,7 @@ enum Mode {
     Service,
     Ui,
     Tray,
+    Update,
     App,
 }
 
@@ -32,6 +35,7 @@ fn mode_from_args() -> Mode {
             "--service" => return Mode::Service,
             "--ui" => return Mode::Ui,
             "--tray" => return Mode::Tray,
+            "--update" => return Mode::Update,
             _ => {}
         }
     }
@@ -57,6 +61,10 @@ fn main() -> ExitCode {
             uf_tray::run();
             ExitCode::SUCCESS
         }
+        #[cfg(windows)]
+        Mode::Update => ExitCode::from(uf_update::run_cli()),
+        #[cfg(not(windows))]
+        Mode::Update => ExitCode::FAILURE,
         Mode::App => {
             #[cfg(windows)]
             launch::run_app();

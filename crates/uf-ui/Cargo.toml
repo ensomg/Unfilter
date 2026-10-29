@@ -11,6 +11,7 @@ description = "Small native settings/status window"
 
 [dependencies]
 uf-ipc = { workspace = true }
+uf-update = { workspace = true }
 slint = { version = "1.18.1", default-features = false, features = [
     "std",
     "compat-1-2",

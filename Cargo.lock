@@ -4605,6 +4605,17 @@ dependencies = [
  "slint",
  "slint-build",
  "uf-ipc",
+ "uf-update",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "uf-update"
+version = "1.0.0"
+dependencies = [
+ "ring",
+ "serde",
+ "serde_json",
  "windows-sys 0.59.0",
 ]
 
@@ -4618,6 +4629,7 @@ dependencies = [
  "uf-service",
  "uf-tray",
  "uf-ui",
+ "uf-update",
  "windows-sys 0.59.0",
 ]
 

@@ -14,8 +14,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SM_CXSMICON, SM_CYICON, SM_CYSMICON, SendMessageW, WM_SETICON,
 };
 
-/// `#101114` as a COLORREF (0x00BBGGRR).
-const CAPTION_BG: u32 = 0x0014_1110;
+/// `#202020` as a COLORREF (0x00BBGGRR).
+const CAPTION_BG: u32 = 0x0020_2020;
 
 fn hwnd_of(window: &slint::Window) -> Option<HWND> {
     let handle = window.window_handle();

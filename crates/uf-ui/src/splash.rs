@@ -12,8 +12,8 @@
 
 use std::f32::consts::{PI, SQRT_2, TAU};
 
-/// Window size (logical px); the window is fixed at 360 x 620 (ADR 004).
-pub const WIN_W: f32 = 360.0;
+/// Window size (logical px); the window is fixed at 520 x 620 (ADR 004).
+pub const WIN_W: f32 = 520.0;
 /// Window height.
 pub const WIN_H: f32 = 620.0;
 /// Where the tile lands.
@@ -22,8 +22,8 @@ pub const CENTER: (f32, f32) = (WIN_W / 2.0, 292.0);
 pub const TILE: f32 = 128.0;
 /// Logo size relative to the final tile at the end of the glide.
 pub const LOGO_FRAC: f32 = 0.62;
-/// Header logo box (x, y, size) in `ui/app.slint`; the logo settles there.
-pub const HEADER_LOGO: (f32, f32, f32) = (20.0, 17.0, 22.0);
+/// Rail logo box (x, y, size) in `ui/app.slint`; the logo settles there.
+pub const HEADER_LOGO: (f32, f32, f32) = (20.0, 18.0, 24.0);
 /// Spring period of the droplet.
 pub const SPRING_PERIOD: f32 = 0.42;
 /// Total length; after this the splash is removed.

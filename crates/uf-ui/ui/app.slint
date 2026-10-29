@@ -1,20 +1,27 @@
-// Unfilter main window (layout, colours and copy follow unfilter-ui-mockup_2.html).
+// Unfilter main window: Windows 11 Fluent layout (navigation rail + pages).
 // Rendered by the slint software renderer: no rotation, blur, rounded clip or
 // gradient borders are used. Spinners use Path arcs; the splash is driven from
-// Rust (src/splash.rs) through the `splash` struct.
+// Rust (src/splash.rs) through the `splash` struct. Pages slide and fade in
+// the direction of navigation (see `Page`).
 
 global Theme {
-    out property <color> bg: #101114;
-    out property <color> bg2: #16181c;
-    out property <color> line: #26292f;
-    out property <color> line-hover: #3a3f48;
-    out property <color> text: #e6e8eb;
-    out property <color> mut: #8a9099;
-    out property <color> dim: #5d646e;
-    out property <color> ok: #4ade80;
-    out property <color> warn: #f5b942;
-    out property <color> bad: #f06b6b;
-    out property <color> ring: #3a3f48;
+    out property <color> bg: #202020;
+    out property <color> card: #2b2b2b;
+    out property <color> card-hover: #323232;
+    out property <color> stroke: #363636;
+    out property <color> control: #2d2d2d;
+    out property <color> control-hover: #383838;
+    out property <color> control-pressed: #272727;
+    out property <color> text: #ffffff;
+    out property <color> mut: #c8c8c8;
+    out property <color> dim: #8b8b8b;
+    out property <color> accent: #60cdff;
+    out property <color> accent-hover: #56b9e8;
+    out property <color> accent-pressed: #4ea6d0;
+    out property <color> on-accent: #000000;
+    out property <color> ok: #6ccb5f;
+    out property <color> warn: #fce100;
+    out property <color> bad: #ff99a4;
     out property <string> ui-font: "Segoe UI";
     out property <string> mono-font: "Consolas";
 }
@@ -67,7 +74,7 @@ component LogoMark inherits Rectangle {
     }
 }
 
-// 24x24 stroked icon (mockup's feather-style icons).
+// 24x24 stroked icon (feather-style paths).
 component Icon inherits Rectangle {
     in property <string> d;
     in property <color> tint: Theme.mut;
@@ -86,20 +93,46 @@ component Icon inherits Rectangle {
     }
 }
 
-component SmallButton inherits Rectangle {
+global Icons {
+    out property <string> shield: "M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3Z";
+    out property <string> check: "m9 12 2 2 4-4";
+    out property <string> globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M3.5 9h17 M3.5 15h17 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18";
+    out property <string> log: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z M14 3v5h5 M9 13h6 M9 17h6";
+    out property <string> gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
+    out property <string> radar: "M12 21a9 9 0 1 0-9-9 M12 17a5 5 0 1 0-5-5 M12 12l6.5-6.5";
+    out property <string> wrench: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a1.4 1.4 0 0 0 0 2l1 1a1.4 1.4 0 0 0 2 0l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5 2.5-2.5Z";
+    out property <string> chevron: "m9 6 6 6-6 6";
+    out property <string> info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M12 11v5 M12 8h.01";
+    out property <string> power: "M12 3v9 M6.3 6.8a8 8 0 1 0 11.4 0";
+    out property <string> ok-mark: "M5 12.5 9.5 17 19 7.5";
+    out property <string> x-mark: "M7 7l10 10 M17 7 7 17";
+    out property <string> refresh: "M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7";
+}
+
+// Fluent button: standard (control fill + hairline) or accent.
+component Button inherits Rectangle {
     in property <string> label;
     in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
     callback clicked();
-    width: txt.preferred-width + 24px;
-    height: 28px;
-    border-radius: 6px;
-    background: Theme.bg2;
-    border-width: 1px;
-    border-color: ta.has-hover && root.enabled ? Theme.line-hover : Theme.line;
+    width: Math.max(txt.preferred-width + 28px, 72px);
+    height: 32px;
+    border-radius: 4px;
+    background: !root.enabled ? (root.primary ? #3f3f3f : Theme.control.with-alpha(0.55))
+        : root.primary ? (ta.pressed ? Theme.accent-pressed : ta.has-hover ? Theme.accent-hover : Theme.accent)
+        : ta.pressed ? Theme.control-pressed : ta.has-hover ? Theme.control-hover : Theme.control;
+    border-width: root.primary ? 0px : 1px;
+    border-color: root.danger && ta.has-hover && root.enabled ? Theme.bad : Theme.stroke;
+    animate background, border-color { duration: 140ms; }
     txt := Text {
         text: root.label;
-        font-size: 12px;
-        color: root.enabled ? Theme.text : Theme.dim;
+        font-size: 13px;
+        color: !root.enabled ? Theme.dim
+            : root.primary ? Theme.on-accent
+            : root.danger && ta.has-hover ? Theme.bad
+            : Theme.text;
+        animate color { duration: 140ms; }
     }
     ta := TouchArea {
         enabled: root.enabled;
@@ -108,28 +141,66 @@ component SmallButton inherits Rectangle {
     }
 }
 
-component FootButton inherits Rectangle {
-    in property <string> label;
+// Fluent toggle switch; the knob grows on hover and springs across.
+component Toggle inherits Rectangle {
+    in property <bool> on;
+    in property <bool> enabled: true;
+    callback toggled();
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    background: !root.enabled ? (root.on ? #4a4a4a : transparent)
+        : root.on ? (ta.has-hover ? Theme.accent-hover : Theme.accent)
+        : ta.has-hover ? #ffffff10 : transparent;
+    border-width: root.on ? 0px : 1px;
+    border-color: root.enabled ? Theme.mut : Theme.dim;
+    animate background { duration: 160ms; }
+    knob := Rectangle {
+        width: ta.pressed ? 17px : ta.has-hover && root.enabled ? 14px : 12px;
+        height: ta.has-hover && root.enabled ? 14px : 12px;
+        border-radius: self.height / 2;
+        x: root.on ? root.width - self.width - 4px : 4px;
+        y: (root.height - self.height) / 2;
+        background: !root.enabled ? Theme.dim : root.on ? Theme.on-accent : Theme.mut;
+        animate x { duration: 260ms; easing: ease-out-back; }
+        animate width, height { duration: 120ms; }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.toggled(); }
+    }
+}
+
+// Navigation rail entry: icon over a short label.
+component RailItem inherits Rectangle {
     in property <string> icon;
+    in property <string> label;
+    in property <bool> selected;
     callback clicked();
-    VerticalLayout {
-        alignment: center;
-        spacing: 6px;
-        HorizontalLayout {
-            alignment: center;
-            Icon {
-                width: 18px;
-                height: 18px;
-                d: root.icon;
-                tint: ta.has-hover ? Theme.text : Theme.mut;
-            }
-        }
-        Text {
-            text: root.label;
-            font-size: 12px;
-            horizontal-alignment: center;
-            color: ta.has-hover ? Theme.text : Theme.mut;
-        }
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    background: ta.pressed ? #ffffff08 : root.selected || ta.has-hover ? #ffffff0f : transparent;
+    animate background { duration: 120ms; }
+    Icon {
+        x: (parent.width - 20px) / 2;
+        y: 9px;
+        width: 20px;
+        height: 20px;
+        d: root.icon;
+        tint: root.selected ? Theme.accent : ta.has-hover ? Theme.text : Theme.mut;
+        animate tint { duration: 160ms; }
+    }
+    Text {
+        x: 0;
+        y: 33px;
+        width: parent.width;
+        horizontal-alignment: center;
+        text: root.label;
+        font-size: 10px;
+        color: root.selected ? Theme.text : Theme.dim;
+        animate color { duration: 160ms; }
     }
     ta := TouchArea {
         mouse-cursor: pointer;
@@ -137,78 +208,123 @@ component FootButton inherits Rectangle {
     }
 }
 
-component PanelHeader inherits Rectangle {
-    in property <string> title;
-    callback back();
-    height: 50px;
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
-        spacing: 10px;
-        Text {
-            text: "←";
-            font-size: 16px;
-            vertical-alignment: center;
-            color: back-ta.has-hover ? Theme.text : Theme.mut;
-            back-ta := TouchArea {
-                mouse-cursor: pointer;
-                clicked => { root.back(); }
-            }
-        }
-        Text {
-            text: root.title;
-            font-weight: 600;
-            font-size: 13px;
-            vertical-alignment: center;
-            color: Theme.text;
-            horizontal-stretch: 1;
-        }
-    }
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Theme.line;
-    }
-}
-
-component SettingRow inherits Rectangle {
+// Settings-style card row: icon, title, note; trailing controls go in @children.
+component RowCard inherits Rectangle {
+    in property <string> icon;
     in property <string> title;
     in property <string> note;
-    height: 56px;
-    Rectangle {
-        y: parent.height - 1px;
-        height: 1px;
-        background: Theme.line;
+    in property <bool> clickable: false;
+    in property <length> trailing: 140px;
+    callback clicked();
+    height: 64px;
+    border-radius: 6px;
+    background: root.clickable && ta.pressed ? Theme.control-pressed
+        : root.clickable && ta.has-hover ? Theme.card-hover : Theme.card;
+    border-width: 1px;
+    border-color: Theme.stroke;
+    animate background { duration: 120ms; }
+    ta := TouchArea {
+        enabled: root.clickable;
+        mouse-cursor: root.clickable ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    Icon {
+        x: 18px;
+        y: (parent.height - 20px) / 2;
+        width: 20px;
+        height: 20px;
+        d: root.icon;
+        tint: Theme.text;
     }
     VerticalLayout {
+        x: 54px;
+        y: 0;
+        width: parent.width - 54px - root.trailing;
+        height: parent.height;
         alignment: center;
-        spacing: 2px;
+        spacing: 1px;
         Text {
             text: root.title;
-            font-size: 13px;
+            font-size: 14px;
             color: Theme.text;
+            overflow: elide;
         }
         if root.note != "": Text {
             text: root.note;
-            font-size: 11px;
+            font-size: 12px;
             color: Theme.mut;
+            overflow: elide;
         }
+    }
+    if root.clickable: Icon {
+        x: parent.width - 36px;
+        y: (parent.height - 16px) / 2;
+        width: 16px;
+        height: 16px;
+        d: Icons.chevron;
+        tint: ta.has-hover ? Theme.text : Theme.mut;
     }
     @children
 }
 
+component SectionTitle inherits Text {
+    font-size: 14px;
+    font-weight: 600;
+    color: Theme.text;
+}
+
+// One navigation page. The incoming page slides in from the side we navigate
+// towards while the outgoing one slides away and fades; the page title lags a
+// little behind the cards (`lag`) for a staggered entrance.
+component Page inherits Rectangle {
+    in property <int> index;
+    in property <int> current;
+    in property <string> title;
+    in property <string> subtitle;
+    // where the page body starts, below the header
+    out property <length> body-y: root.subtitle != "" ? 112px : 80px;
+    property <bool> active: root.index == root.current;
+    property <length> away: root.index > root.current ? 56px : -56px;
+    out property <length> lag: root.active ? 0px : root.away * 0.5;
+    x: root.active ? 0px : root.away;
+    opacity: root.active ? 1.0 : 0.0;
+    visible: self.opacity > 0.001;
+    z: root.active ? 1 : 0;
+    animate x { duration: 340ms; easing: cubic-bezier(0.1, 0.9, 0.2, 1.0); }
+    animate opacity { duration: 220ms; easing: ease-out; }
+    animate lag { duration: 520ms; easing: cubic-bezier(0.1, 0.9, 0.2, 1.0); }
+    TouchArea { }  // a fading page must not pass clicks to the one underneath
+    Text {
+        x: 28px + root.lag;
+        y: 20px;
+        text: root.title;
+        font-size: 28px;
+        font-weight: 600;
+        color: Theme.text;
+    }
+    if root.subtitle != "": Text {
+        x: 28px + root.lag;
+        y: 66px;
+        width: root.width - 56px;
+        wrap: word-wrap;
+        text: root.subtitle;
+        font-size: 13px;
+        color: Theme.mut;
+    }
+}
+
 export component AppWindow inherits Window {
     title: "Unfilter";
-    width: 360px;
+    width: 520px;
     height: 620px;
     background: Theme.bg;
     default-font-family: Theme.ui-font;
     default-font-size: 13px;
 
     in property <Visual> visual: Visual.offline;
-    in property <string> state-title: "SERVİS YOK";
+    in property <string> state-title: "Servis yok";
     in property <string> state-sub: "";
-    in property <string> go-label: "BAĞLAN";
+    in property <string> go-label: "Bağlan";
     in property <bool> go-outline: false;
     in property <bool> go-enabled: false;
     in property <bool> controls-enabled: false;
@@ -222,10 +338,16 @@ export component AppWindow inherits Window {
     in property <bool> toast-shown: false;
     in property <bool> splash-active: true;
     in property <SplashFrame> splash;
-    // 0 = main, 1 = Ayarlar, 2 = Loglar
+    // 0 = Koruma, 1 = Siteler, 2 = Günlük, 3 = Ayarlar
     in-out property <int> panel: 0;
+    // Ayarlar update row; an empty action hides its button
+    in property <string> update-text: "Güncellemeler denetleniyor…";
+    in property <string> update-action: "";
+    in property <bool> update-primary: false;
+    in property <bool> update-busy: false;
 
     callback go-clicked();
+    callback update-clicked();
     callback repair-clicked();
     callback rescan-clicked();
     callback test-clicked(string);
@@ -235,417 +357,607 @@ export component AppWindow inherits Window {
     property <color> state-color: root.visual == Visual.connected ? Theme.ok
         : root.visual == Visual.scanning ? Theme.warn
         : root.visual == Visual.fault ? Theme.bad
-        : root.visual == Visual.offline ? Theme.mut
+        : root.visual == Visual.offline ? Theme.dim
         : Theme.text;
+    property <bool> active: root.visual == Visual.connected || root.visual == Visual.scanning;
+    // 0 -> 1 while the splash hands over; rail and pages ride in on it
+    property <float> intro: root.splash-active ? root.splash.main-opacity : 1.0;
+    property <length> rail-w: 64px;
+    property <length> pad: 28px;
 
     // ---------------------------------------------------------------- main
     main := Rectangle {
-        opacity: root.splash-active ? root.splash.main-opacity : 1.0;
+        opacity: root.intro;
 
-        // header (y 0..56). The logo box must match splash::HEADER_LOGO.
-        Rectangle {
-            x: 0;
+        // ------------------------------------------------------- rail
+        // The logo box must match splash::HEADER_LOGO.
+        LogoMark {
+            x: 20px;
+            y: 18px;
+            width: 24px;
+            height: 24px;
+            visible: !root.splash-active;
+        }
+        rail := Rectangle {
+            x: -16px * (1 - root.intro);
             y: 0;
-            height: 56px;
-            LogoMark {
-                x: 20px;
-                y: 17px;
-                width: 22px;
-                height: 22px;
-                visible: !root.splash-active;
+            width: root.rail-w;
+            height: root.height;
+            for item[i] in [
+                { icon: Icons.shield, label: "Koruma" },
+                { icon: Icons.globe, label: "Siteler" },
+                { icon: Icons.log, label: "Günlük" },
+            ]: RailItem {
+                x: 6px;
+                y: 60px + i * 58px;
+                icon: item.icon;
+                label: item.label;
+                selected: root.panel == i;
+                clicked => { root.panel = i; }
             }
-            Text {
-                x: 50px;
-                y: 0;
-                height: 56px;
-                vertical-alignment: center;
-                text: "UN";
-                font-weight: 700;
-                font-size: 15px;
-                letter-spacing: 3.3px;
-                color: Theme.text;
+            RailItem {
+                x: 6px;
+                y: root.height - 64px;
+                icon: Icons.gear;
+                label: "Ayarlar";
+                selected: root.panel == 3;
+                clicked => { root.panel = 3; }
             }
-            Text {
-                x: 50px + 29px;
-                y: 0;
-                height: 56px;
-                vertical-alignment: center;
-                text: "FILTER";
-                font-weight: 500;
-                font-size: 15px;
-                letter-spacing: 3.3px;
-                color: Theme.mut;
-            }
-            SmallButton {
-                x: parent.width - self.width - 20px;
-                y: (56px - self.height) / 2;
-                label: "Onar";
-                enabled: root.controls-enabled;
-                clicked => { root.repair-clicked(); }
-            }
+            // selection pill, glides between entries
             Rectangle {
-                y: 55px;
-                height: 1px;
-                background: Theme.line;
+                x: 7px;
+                y: (root.panel == 3 ? root.height - 64px : 60px + root.panel * 58px) + 18px;
+                width: 3px;
+                height: 16px;
+                border-radius: 1.5px;
+                background: Theme.accent;
+                animate y { duration: 380ms; easing: cubic-bezier(0.1, 0.9, 0.2, 1.0); }
             }
         }
 
-        // soft halo in the state colour behind the ring; breathes while scanning
-        Rectangle {
-            x: (root.width - 132px) / 2;
-            y: 84px;
-            width: 132px;
-            height: 132px;
-            border-radius: 66px;
-            background: Theme.bg;
-            drop-shadow-blur: 34px;
-            drop-shadow-color: root.visual == Visual.connected ? Theme.ok.with-alpha(0.38)
-                : root.visual == Visual.scanning ? Theme.warn.with-alpha(0.32)
-                : root.visual == Visual.fault ? Theme.bad.with-alpha(0.32)
-                : transparent;
-            animate drop-shadow-color { duration: 450ms; easing: ease-in-out; }
-            opacity: root.visual == Visual.scanning
-                ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1400) / 1400 * 180deg))
-                : 1.0;
-        }
+        // ------------------------------------------------------ pages
+        pages := Rectangle {
+            x: root.rail-w;
+            y: 20px * (1 - root.intro);
+            width: root.width - root.rail-w;
+            height: root.height;
 
-        // ripples spreading out from the ring while connected
-        for i in [0, 1]: Rectangle {
-            property <float> t: root.visual == Visual.connected
-                ? Math.mod(animation-tick() / 1ms + i * 1300, 2600) / 2600 : 0;
-            property <length> size: 132px + 70px * t;
-            visible: root.visual == Visual.connected;
-            x: (root.width - self.size) / 2;
-            y: 84px + (132px - self.size) / 2;
-            width: self.size;
-            height: self.size;
-            border-radius: self.size / 2;
-            border-width: 1.5px;
-            border-color: Theme.ok.with-alpha(0.45 * (1 - self.t));
-        }
-
-        // status ring
-        Rectangle {
-            x: (root.width - 132px) / 2;
-            y: 84px;
-            width: 132px;
-            height: 132px;
-            border-radius: 66px;
-            border-width: 2px;
-            border-color: root.visual == Visual.scanning ? Theme.ring.with-alpha(0.5)
-                : root.visual == Visual.connected ? Theme.ok
-                : root.visual == Visual.fault ? Theme.bad
-                : Theme.ring;
-            background: Theme.bg;
-            animate border-color { duration: 300ms; }
-
-            // rotating 3/4 arc while scanning (only exists, and only animates, then)
-            if root.visual == Visual.scanning: Path {
-                property <angle> a0: Math.mod(animation-tick() / 1ms, 1000) / 1000 * 360deg;
-                width: 132px;
-                height: 132px;
-                viewbox-width: 132;
-                viewbox-height: 132;
-                stroke: Theme.warn;
-                stroke-width: 2px;
-                stroke-line-cap: round;
-                fill: transparent;
-                MoveTo {
-                    x: 66 + 65 * Math.cos(a0);
-                    y: 66 + 65 * Math.sin(a0);
-                }
-                ArcTo {
-                    x: 66 + 65 * Math.cos(a0 + 270deg);
-                    y: 66 + 65 * Math.sin(a0 + 270deg);
-                    radius-x: 65;
-                    radius-y: 65;
-                    large-arc: true;
-                    sweep: true;
-                }
-            }
-
-            Icon {
-                x: (parent.width - 44px) / 2;
-                y: (parent.height - 44px) / 2;
-                width: 44px;
-                height: 44px;
-                stroke-w: 1.8px;
-                d: "M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3Z";
-                tint: root.visual == Visual.ready || root.visual == Visual.offline ? Theme.mut : root.state-color;
-                animate tint { duration: 350ms; }
-                opacity: root.visual == Visual.scanning
-                    ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1600) / 1600 * 180deg))
-                    : 1.0;
-            }
-            check := Icon {
-                property <bool> on: root.visual == Visual.connected;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                width: self.on ? 44px : 20px;
-                height: self.width;
-                stroke-w: 1.8px;
-                d: "m9 12 2 2 4-4";
-                tint: Theme.ok;
-                opacity: self.on ? 1 : 0;
-                animate width { duration: 420ms; easing: ease-out-back; }
-                animate opacity { duration: 260ms; }
-            }
-        }
-
-        Text {
-            x: 0;
-            y: 238px;
-            width: root.width;
-            horizontal-alignment: center;
-            text: root.state-title;
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 3.5px;
-            color: root.state-color;
-            animate color { duration: 350ms; }
-        }
-        Text {
-            x: 20px;
-            y: 274px;
-            width: root.width - 40px;
-            height: 36px;
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            text: root.state-sub;
-            color: Theme.mut;
-        }
-
-        // primary button
-        go := Rectangle {
-            x: 20px;
-            y: 332px;
-            width: root.width - 40px;
-            height: 48px;
-            border-radius: 8px;
-            background: !root.go-enabled ? #24272d
-                : root.go-outline ? transparent
-                : go-ta.has-hover ? #ffffff : #f1f2f4;
-            border-width: root.go-outline ? 1px : 0px;
-            border-color: go-ta.has-hover ? Theme.bad : Theme.line;
-            animate background, border-color { duration: 200ms; }
-            Text {
-                text: root.go-label;
-                font-weight: 700;
-                letter-spacing: 1.6px;
-                color: !root.go-enabled ? Theme.dim
-                    : root.go-outline ? (go-ta.has-hover ? Theme.bad : Theme.text)
-                    : #101114;
-            }
-            go-ta := TouchArea {
-                enabled: root.go-enabled;
-                mouse-cursor: root.go-enabled ? pointer : default;
-                clicked => { root.go-clicked(); }
-            }
-        }
-
-        // footer
-        Rectangle {
-            x: 0;
-            y: root.height - 66px;
-            width: root.width;
-            height: 66px;
-            Rectangle {
-                y: 0;
-                height: 1px;
-                background: Theme.line;
-            }
-            HorizontalLayout {
-                FootButton {
-                    label: "AYARLAR";
-                    icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z";
-                    clicked => { root.panel = 1; }
-                }
-                Rectangle {
-                    width: 1px;
-                    background: Theme.line;
-                }
-                FootButton {
-                    label: "LOGLAR";
-                    icon: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z M14 3v5h5 M9 13h6 M9 17h6";
-                    clicked => { root.panel = 2; }
-                }
-                Rectangle {
-                    width: 1px;
-                    background: Theme.line;
-                }
-                FootButton {
-                    label: "ÇIKIŞ";
-                    icon: "M12 3v9 M6.3 6.8a8 8 0 1 0 11.4 0";
-                    clicked => { root.exit-clicked(); }
-                }
-            }
-        }
-
-        // ------------------------------------------------------- Ayarlar
-        if root.panel == 1: Rectangle {
-            background: Theme.bg;
-            TouchArea { }  // swallow clicks meant for the main screen
-            PanelHeader {
-                y: 0;
-                title: "Ayarlar";
-                back => { root.panel = 0; }
-            }
-            VerticalLayout {
-                y: 50px;
-                height: parent.height - 50px;
-                padding: 16px;
-                padding-top: 4px;
-                alignment: start;
-                SettingRow {
-                    title: "Strateji";
-                    note: root.strategy-text;
-                    SmallButton {
-                        x: parent.width - self.width;
-                        y: (parent.height - self.height) / 2;
-                        label: "Yeniden tara";
-                        enabled: root.controls-enabled;
-                        clicked => { root.rescan-clicked(); }
-                    }
-                }
-                SettingRow {
-                    title: "Sürüm";
-                    note: root.version-text;
-                }
-                Text {
-                    text: "Diğer tercihler (başlangıçta çalıştır, DNS sağlayıcı, güncelleme) servis tarafında config/default.toml üzerinden yönetilir.";
-                    wrap: word-wrap;
-                    font-size: 11px;
-                    color: Theme.dim;
-                }
-            }
-        }
-
-        // -------------------------------------------------------- Loglar
-        if root.panel == 2: Rectangle {
-            background: Theme.bg;
-            TouchArea { }
-            PanelHeader {
-                y: 0;
-                title: "Loglar";
-                back => { root.panel = 0; }
-            }
-            VerticalLayout {
-                y: 50px;
-                height: parent.height - 50px;
-                padding: 16px;
-                spacing: 10px;
-                HorizontalLayout {
-                    spacing: 8px;
-                    height: 32px;
-                    Rectangle {
-                        horizontal-stretch: 1;
-                        border-radius: 6px;
-                        border-width: 1px;
-                        border-color: host-input.has-focus ? Theme.line-hover : Theme.line;
-                        background: Theme.bg2;
-                        host-input := TextInput {
-                            x: 10px;
-                            width: parent.width - 20px;
-                            height: parent.height;
-                            vertical-alignment: center;
-                            single-line: true;
-                            text <=> root.test-host;
-                            color: Theme.text;
-                            selection-background-color: #2f6b45;
-                            font-size: 13px;
-                            accepted => { root.test-clicked(self.text); }
-                        }
-                        if root.test-host == "": Text {
-                            x: 10px;
-                            text: "site adresi";
-                            color: Theme.dim;
-                        }
-                    }
-                    SmallButton {
-                        height: 32px;
-                        label: root.test-busy ? "Test ediliyor…" : "Test et";
-                        enabled: root.controls-enabled && !root.test-busy;
-                        clicked => { root.test-clicked(root.test-host); }
-                    }
-                }
+            // ------------------------------------------------- Koruma
+            home := Page {
+                index: 0;
+                current: root.panel;
+                title: "Koruma";
                 VerticalLayout {
-                    spacing: 4px;
-                    for row in root.test-rows: HorizontalLayout {
+                    y: home.body-y;
+                    height: parent.height - home.body-y;
+                    padding: root.pad;
+                    padding-top: 0;
+                    spacing: 8px;
+                    alignment: start;
+
+                    // hero card: status ring, title, toggle
+                    Rectangle {
+                        height: 148px;
+                        border-radius: 8px;
+                        background: Theme.card;
+                        border-width: 1px;
+                        border-color: Theme.stroke;
+                        property <length> ring: 84px;
+                        property <length> rx: 24px;
+                        property <length> ry: (self.height - self.ring) / 2;
+
+                        // soft halo in the state colour; breathes while scanning
+                        Rectangle {
+                            x: parent.rx;
+                            y: parent.ry;
+                            width: parent.ring;
+                            height: parent.ring;
+                            border-radius: self.width / 2;
+                            background: Theme.card;
+                            drop-shadow-blur: 26px;
+                            drop-shadow-color: root.visual == Visual.connected ? Theme.ok.with-alpha(0.34)
+                                : root.visual == Visual.scanning ? Theme.warn.with-alpha(0.26)
+                                : root.visual == Visual.fault ? Theme.bad.with-alpha(0.30)
+                                : root.visual == Visual.ready ? Theme.accent.with-alpha(0.16)
+                                : transparent;
+                            animate drop-shadow-color { duration: 450ms; easing: ease-in-out; }
+                            opacity: root.visual == Visual.scanning
+                                ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1400) / 1400 * 180deg))
+                                : 1.0;
+                        }
+                        // ripples while connected
+                        for i in [0, 1]: Rectangle {
+                            property <float> t: root.visual == Visual.connected
+                                ? Math.mod(animation-tick() / 1ms + i * 1300, 2600) / 2600 : 0;
+                            property <length> size: parent.ring + 40px * self.t;
+                            visible: root.visual == Visual.connected;
+                            x: parent.rx + (parent.ring - self.size) / 2;
+                            y: parent.ry + (parent.ring - self.size) / 2;
+                            width: self.size;
+                            height: self.size;
+                            border-radius: self.size / 2;
+                            border-width: 1.5px;
+                            border-color: Theme.ok.with-alpha(0.45 * (1 - self.t));
+                        }
+                        // status ring
+                        Rectangle {
+                            x: parent.rx;
+                            y: parent.ry;
+                            width: parent.ring;
+                            height: parent.ring;
+                            border-radius: self.width / 2;
+                            border-width: 2px;
+                            border-color: root.visual == Visual.scanning ? Theme.stroke
+                                : root.visual == Visual.connected ? Theme.ok
+                                : root.visual == Visual.fault ? Theme.bad
+                                : root.visual == Visual.ready ? Theme.accent.with-alpha(0.6)
+                                : Theme.stroke;
+                            background: Theme.card;
+                            animate border-color { duration: 300ms; }
+
+                            if root.visual == Visual.scanning: Path {
+                                property <angle> a0: Math.mod(animation-tick() / 1ms, 1000) / 1000 * 360deg;
+                                width: 84px;
+                                height: 84px;
+                                viewbox-width: 84;
+                                viewbox-height: 84;
+                                stroke: Theme.warn;
+                                stroke-width: 2px;
+                                stroke-line-cap: round;
+                                fill: transparent;
+                                MoveTo {
+                                    x: 42 + 41 * Math.cos(a0);
+                                    y: 42 + 41 * Math.sin(a0);
+                                }
+                                ArcTo {
+                                    x: 42 + 41 * Math.cos(a0 + 270deg);
+                                    y: 42 + 41 * Math.sin(a0 + 270deg);
+                                    radius-x: 41;
+                                    radius-y: 41;
+                                    large-arc: true;
+                                    sweep: true;
+                                }
+                            }
+                            Icon {
+                                x: (parent.width - 34px) / 2;
+                                y: (parent.height - 34px) / 2;
+                                width: 34px;
+                                height: 34px;
+                                stroke-w: 1.8px;
+                                d: Icons.shield;
+                                tint: root.visual == Visual.offline ? Theme.dim
+                                    : root.visual == Visual.ready ? Theme.accent : root.state-color;
+                                animate tint { duration: 350ms; }
+                                opacity: root.visual == Visual.scanning
+                                    ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1600) / 1600 * 180deg))
+                                    : 1.0;
+                            }
+                            Icon {
+                                property <bool> on: root.visual == Visual.connected;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: self.on ? 34px : 14px;
+                                height: self.width;
+                                stroke-w: 1.8px;
+                                d: Icons.check;
+                                tint: Theme.ok;
+                                opacity: self.on ? 1 : 0;
+                                animate width { duration: 420ms; easing: ease-out-back; }
+                                animate opacity { duration: 260ms; }
+                            }
+                        }
+
+                        property <length> tx: self.rx + self.ring + 24px;
                         Text {
-                            text: row.label;
+                            x: parent.tx;
+                            y: 36px;
+                            width: parent.width - parent.tx - 120px;
+                            text: root.state-title;
+                            font-size: 20px;
+                            font-weight: 600;
+                            overflow: elide;
+                            color: root.state-color;
+                            animate color { duration: 350ms; }
+                        }
+                        Text {
+                            x: parent.tx;
+                            y: 68px;
+                            width: parent.width - parent.tx - 20px;
+                            height: 44px;
+                            wrap: word-wrap;
+                            overflow: elide;
+                            text: root.state-sub;
                             font-size: 12px;
                             color: Theme.mut;
-                            horizontal-stretch: 1;
+                        }
+                        go := Toggle {
+                            x: parent.width - self.width - 20px;
+                            y: 40px;
+                            on: root.active;
+                            enabled: root.go-enabled;
+                            toggled => { root.go-clicked(); }
                         }
                         Text {
-                            text: row.value;
+                            x: go.x - self.width - 10px;
+                            y: go.y + (go.height - self.height) / 2;
+                            text: root.active ? "Açık" : "Kapalı";
+                            font-size: 13px;
+                            color: root.go-enabled ? Theme.text : Theme.dim;
+                        }
+                    }
+
+                    Rectangle { height: 12px; }
+                    SectionTitle {
+                        text: "Bağlantı";
+                    }
+                    RowCard {
+                        icon: Icons.radar;
+                        title: "Strateji";
+                        note: root.strategy-text;
+                        Button {
+                            x: parent.width - self.width - 16px;
+                            y: (parent.height - self.height) / 2;
+                            label: "Yeniden tara";
+                            enabled: root.controls-enabled;
+                            clicked => { root.rescan-clicked(); }
+                        }
+                    }
+                    RowCard {
+                        icon: Icons.wrench;
+                        title: "Ağı onar";
+                        note: "Sürücüyü ve ağ ayarlarını denetler";
+                        Button {
+                            x: parent.width - self.width - 16px;
+                            y: (parent.height - self.height) / 2;
+                            label: "Onar";
+                            enabled: root.controls-enabled;
+                            clicked => { root.repair-clicked(); }
+                        }
+                    }
+                    RowCard {
+                        icon: Icons.globe;
+                        title: "Bir siteyi test et";
+                        note: "Engelin aşılıp aşılmadığını gör";
+                        clickable: true;
+                        trailing: 48px;
+                        clicked => { root.panel = 1; }
+                    }
+                }
+            }
+
+            // ------------------------------------------------ Siteler
+            sites := Page {
+                index: 1;
+                current: root.panel;
+                title: "Siteler";
+                subtitle: "Bir sitenin engelli olup olmadığını ve Unfilter'ın onu açıp açamadığını sına.";
+                VerticalLayout {
+                    y: sites.body-y;
+                    height: parent.height - sites.body-y;
+                    padding: root.pad;
+                    padding-top: 0;
+                    spacing: 8px;
+                    alignment: start;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        height: 32px;
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            border-radius: 4px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            background: host-input.has-focus ? #1f1f1f : Theme.control;
+                            animate background { duration: 120ms; }
+                            host-input := TextInput {
+                                x: 11px;
+                                width: parent.width - 22px;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                single-line: true;
+                                text <=> root.test-host;
+                                color: Theme.text;
+                                selection-background-color: #0a5a82;
+                                font-size: 13px;
+                                accepted => { root.test-clicked(self.text); }
+                            }
+                            if root.test-host == "": Text {
+                                x: 11px;
+                                text: "discord.com";
+                                color: Theme.dim;
+                            }
+                            // Fluent focus underline grows from the centre
+                            Rectangle {
+                                y: parent.height - 2px;
+                                height: 2px;
+                                width: host-input.has-focus ? parent.width - 2px : 0px;
+                                x: (parent.width - self.width) / 2;
+                                background: Theme.accent;
+                                animate width { duration: 220ms; easing: ease-out; }
+                            }
+                        }
+                        Button {
+                            primary: true;
+                            label: root.test-busy ? "Sınanıyor…" : "Test et";
+                            enabled: root.controls-enabled && !root.test-busy;
+                            clicked => { root.test-clicked(root.test-host); }
+                        }
+                    }
+                    // indeterminate progress bar
+                    Rectangle {
+                        height: 3px;
+                        clip: true;
+                        opacity: root.test-busy ? 1 : 0;
+                        animate opacity { duration: 200ms; }
+                        if root.test-busy: Rectangle {
+                            property <float> t: Math.mod(animation-tick() / 1ms, 1300) / 1300;
+                            width: parent.width * 0.35;
+                            height: 3px;
+                            x: -self.width + (parent.width + self.width) * self.t;
+                            border-radius: 1.5px;
+                            background: Theme.accent;
+                        }
+                    }
+                    Rectangle {
+                        height: root.test-rows.length == 0 ? 64px : root.test-rows.length * 44px + 2px;
+                        border-radius: 6px;
+                        background: Theme.card;
+                        border-width: 1px;
+                        border-color: Theme.stroke;
+                        animate height { duration: 260ms; easing: cubic-bezier(0.1, 0.9, 0.2, 1.0); }
+                        clip: true;
+                        if root.test-rows.length == 0: Text {
+                            x: 18px;
+                            width: parent.width - 36px;
+                            wrap: word-wrap;
+                            text: root.test-busy ? "DNS, TCP ve TLS adımları sınanıyor…" : "Sonuçlar burada görünür: DNS, TCP, TLS/SNI ve kullanılan yöntem.";
                             font-size: 12px;
-                            color: row.ok ? Theme.ok : Theme.bad;
+                            color: Theme.dim;
+                        }
+                        for row[i] in root.test-rows: Rectangle {
+                            x: 1px;
+                            y: 1px + i * 44px;
+                            width: parent.width - 2px;
+                            height: 44px;
+                            if i > 0: Rectangle {
+                                x: 16px;
+                                y: 0;
+                                width: parent.width - 32px;
+                                height: 1px;
+                                background: Theme.stroke;
+                            }
+                            Rectangle {
+                                x: 16px;
+                                y: (parent.height - 20px) / 2;
+                                width: 20px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: (row.ok ? Theme.ok : Theme.bad).with-alpha(0.16);
+                                Icon {
+                                    x: 4px;
+                                    y: 4px;
+                                    width: 12px;
+                                    height: 12px;
+                                    stroke-w: 2.4px;
+                                    d: row.ok ? Icons.ok-mark : Icons.x-mark;
+                                    tint: row.ok ? Theme.ok : Theme.bad;
+                                }
+                            }
+                            Text {
+                                x: 48px;
+                                y: 0;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                text: row.label;
+                                font-size: 13px;
+                                color: Theme.text;
+                            }
+                            Text {
+                                x: parent.width - self.width - 16px;
+                                y: 0;
+                                width: Math.min(self.preferred-width, parent.width - 160px);
+                                height: parent.height;
+                                vertical-alignment: center;
+                                horizontal-alignment: right;
+                                overflow: elide;
+                                text: row.value;
+                                font-size: 12px;
+                                color: row.ok ? Theme.mut : Theme.bad;
+                            }
                         }
                     }
                 }
-                Rectangle {
-                    height: 1px;
-                    background: Theme.line;
-                }
-                Flickable {
-                    vertical-stretch: 1;
-                    content-height: log-col.preferred-height;
-                    log-col := VerticalLayout {
-                        alignment: start;
-                        for l in root.logs: HorizontalLayout {
-                            spacing: 8px;
-                            height: 19px;
-                            Text {
-                                text: l.time;
-                                font-family: Theme.mono-font;
-                                font-size: 11.5px;
-                                color: Theme.dim;
-                            }
-                            Text {
-                                text: l.host;
-                                font-family: Theme.mono-font;
-                                font-size: 11.5px;
-                                color: Theme.mut;
-                                overflow: elide;
-                                horizontal-stretch: 1;
-                            }
-                            Text {
-                                text: l.method;
-                                font-family: Theme.mono-font;
-                                font-size: 11.5px;
-                                color: l.ok ? Theme.ok : Theme.warn;
-                                overflow: elide;
+            }
+
+            // ------------------------------------------------- Günlük
+            logs-page := Page {
+                index: 2;
+                current: root.panel;
+                title: "Günlük";
+                subtitle: "Bağlıyken yapılan son site erişimleri ve kullanılan yöntem.";
+                VerticalLayout {
+                    y: logs-page.body-y;
+                    height: parent.height - logs-page.body-y;
+                    padding: root.pad;
+                    padding-top: 0;
+                    spacing: 8px;
+                    Rectangle {
+                        vertical-stretch: 1;
+                        border-radius: 6px;
+                        background: Theme.card;
+                        border-width: 1px;
+                        border-color: Theme.stroke;
+                        Flickable {
+                            x: 14px;
+                            y: 10px;
+                            width: parent.width - 28px;
+                            height: parent.height - 20px;
+                            content-height: log-col.preferred-height;
+                            log-col := VerticalLayout {
+                                alignment: start;
+                                for l in root.logs: HorizontalLayout {
+                                    spacing: 10px;
+                                    height: 22px;
+                                    Text {
+                                        text: l.time;
+                                        vertical-alignment: center;
+                                        font-family: Theme.mono-font;
+                                        font-size: 11.5px;
+                                        color: Theme.dim;
+                                    }
+                                    Text {
+                                        text: l.host;
+                                        vertical-alignment: center;
+                                        font-family: Theme.mono-font;
+                                        font-size: 11.5px;
+                                        color: Theme.text;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                    }
+                                    Text {
+                                        text: l.method;
+                                        vertical-alignment: center;
+                                        font-family: Theme.mono-font;
+                                        font-size: 11.5px;
+                                        color: l.ok ? Theme.ok : Theme.warn;
+                                        overflow: elide;
+                                    }
+                                }
+                                if root.logs.length == 0: VerticalLayout {
+                                    padding-top: 120px;
+                                    spacing: 10px;
+                                    HorizontalLayout {
+                                        alignment: center;
+                                        Icon {
+                                            width: 28px;
+                                            height: 28px;
+                                            d: Icons.log;
+                                            tint: Theme.dim;
+                                        }
+                                    }
+                                    Text {
+                                        text: "Henüz kayıt yok";
+                                        horizontal-alignment: center;
+                                        font-size: 14px;
+                                        color: Theme.mut;
+                                    }
+                                    Text {
+                                        text: "Bağlandığında site erişimleri burada görünür.";
+                                        horizontal-alignment: center;
+                                        wrap: word-wrap;
+                                        font-size: 12px;
+                                        color: Theme.dim;
+                                    }
+                                }
                             }
                         }
-                        if root.logs.length == 0: Text {
-                            text: "Henüz log yok. Bağlandığında site erişimleri burada görünür.";
+                    }
+                }
+            }
+
+            // ------------------------------------------------ Ayarlar
+            settings := Page {
+                index: 3;
+                current: root.panel;
+                title: "Ayarlar";
+                VerticalLayout {
+                    y: settings.body-y;
+                    height: parent.height - settings.body-y;
+                    padding: root.pad;
+                    padding-top: 0;
+                    spacing: 8px;
+                    alignment: start;
+                    SectionTitle {
+                        text: "Hakkında";
+                    }
+                    RowCard {
+                        icon: Icons.info;
+                        title: "Sürüm";
+                        note: root.version-text;
+                        trailing: 20px;
+                    }
+                    RowCard {
+                        icon: Icons.refresh;
+                        title: "Güncellemeler";
+                        note: root.update-text;
+                        trailing: 128px;
+                        if root.update-action != "": Button {
+                            x: parent.width - self.width - 16px;
+                            y: (parent.height - self.height) / 2;
+                            label: root.update-busy ? "Bekleyin…" : root.update-action;
+                            primary: root.update-primary;
+                            enabled: !root.update-busy;
+                            clicked => { root.update-clicked(); }
+                        }
+                    }
+                    Rectangle {
+                        height: 56px;
+                        border-radius: 6px;
+                        background: Theme.card;
+                        border-width: 1px;
+                        border-color: Theme.stroke;
+                        Text {
+                            x: 18px;
+                            width: parent.width - 36px;
                             wrap: word-wrap;
-                            font-size: 11.5px;
-                            color: Theme.dim;
+                            text: "Başlangıçta çalıştırma ve DNS sağlayıcı tercihleri servis tarafında config/default.toml dosyasından yönetilir.";
+                            font-size: 12px;
+                            color: Theme.mut;
+                        }
+                    }
+                    Rectangle { height: 12px; }
+                    SectionTitle {
+                        text: "Uygulama";
+                    }
+                    RowCard {
+                        icon: Icons.power;
+                        title: "Unfilter'dan çık";
+                        note: "Pencereyi ve tepsi simgesini kapatır";
+                        Button {
+                            x: parent.width - self.width - 16px;
+                            y: (parent.height - self.height) / 2;
+                            label: "Çık";
+                            danger: true;
+                            clicked => { root.exit-clicked(); }
                         }
                     }
                 }
             }
         }
 
-        // toast
+        // toast (Fluent info bar)
         Rectangle {
-            x: 16px;
-            y: root.height - 84px - self.height + (root.toast-shown ? 0px : 6px);
-            width: root.width - 32px;
-            height: toast-txt.preferred-height + 20px;
-            border-radius: 8px;
+            x: root.rail-w + root.pad;
+            y: root.height - 24px - self.height + (root.toast-shown ? 0px : 10px);
+            width: root.width - root.rail-w - 2 * root.pad;
+            height: Math.max(toast-txt.preferred-height + 24px, 48px);
+            z: 2;
+            border-radius: 6px;
             border-width: 1px;
-            border-color: Theme.line;
-            background: #22252b;
+            border-color: Theme.stroke;
+            background: #2f2f2f;
             opacity: root.toast-shown ? 1.0 : 0.0;
-            animate opacity, y { duration: 250ms; }
+            visible: self.opacity > 0.001;
+            animate opacity { duration: 220ms; }
+            animate y { duration: 320ms; easing: cubic-bezier(0.1, 0.9, 0.2, 1.0); }
+            Rectangle {
+                x: 16px;
+                y: (parent.height - 18px) / 2;
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: Theme.accent;
+                Text {
+                    text: "i";
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: Theme.on-accent;
+                }
+            }
             toast-txt := Text {
-                x: 14px;
-                width: parent.width - 28px;
+                x: 46px;
+                width: parent.width - 62px;
                 text: root.toast-text;
-                font-size: 12px;
+                font-size: 13px;
                 wrap: word-wrap;
                 color: Theme.text;
             }

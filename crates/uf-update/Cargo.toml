@@ -1,0 +1,31 @@
+[package]
+name = "uf-update"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Signed self-update from GitHub Releases"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+ring = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinHttp",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# Maintainer tool (key generation and release signing); not shipped.
+[[bin]]
+name = "uf-release"
+path = "src/bin/uf-release.rs"
+
+[lints]
+workspace = true

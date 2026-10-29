@@ -13,6 +13,7 @@ uf-service = { workspace = true }
 uf-ui = { workspace = true }
 uf-tray = { workspace = true }
 uf-ipc = { workspace = true }
+uf-update = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 uf-capture = { workspace = true }

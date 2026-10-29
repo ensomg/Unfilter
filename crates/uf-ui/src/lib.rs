@@ -30,6 +30,7 @@ mod app {
     use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
     use uf_ipc::pipe::{LinkEvent, OfflineReason, ServiceLink};
     use uf_ipc::{Event, PIPE_NAME, Request, ResponsePayload, ServerMessage};
+    use uf_update::{Check, exit};
 
     use crate::view::{self, Conn, Offline};
     use crate::{AppWindow, LogLine, SplashFrame, TestRow, Visual, splash, win};
@@ -118,6 +119,79 @@ mod app {
                     }
                 },
             );
+        });
+    }
+
+    /// Fills the Ayarlar update row from a check result.
+    fn show_update(ui: &AppWindow, found: &Result<Check, uf_update::Error>) {
+        let current = uf_update::Version::current();
+        let (text, action, primary) = match found {
+            Ok(Check::UpToDate) => (format!("Güncel (sürüm {current})"), "Denetle", false),
+            Ok(Check::Available(r)) => {
+                (format!("Yeni sürüm hazır: {}", r.version), "Güncelle", true)
+            }
+            Ok(Check::RestartPending) => (
+                "İndirildi, yeniden başlatınca uygulanır".to_owned(),
+                "",
+                false,
+            ),
+            Err(e) => (format!("Denetlenemedi: {e}"), "Tekrar dene", false),
+        };
+        ui.set_update_text(text.into());
+        ui.set_update_action(action.into());
+        ui.set_update_primary(primary);
+        ui.set_update_busy(false);
+    }
+
+    /// Asks GitHub for a newer release off the UI thread; `announce` toasts
+    /// when one is found.
+    fn check_updates(ui: &AppWindow, announce: bool) {
+        ui.set_update_busy(true);
+        ui.set_update_text("Güncellemeler denetleniyor…".into());
+        let weak = ui.as_weak();
+        std::thread::spawn(move || {
+            let found = uf_update::check();
+            let _ = weak.upgrade_in_event_loop(move |ui| {
+                show_update(&ui, &found);
+                if let (true, Ok(Check::Available(r))) = (announce, &found) {
+                    toast(
+                        &ui,
+                        &format!(
+                            "Yeni sürüm mevcut: {}. Ayarlar'dan kurabilirsin.",
+                            r.version
+                        ),
+                    );
+                }
+            });
+        });
+    }
+
+    /// Installs the release through an elevated `--update` run.
+    fn install_update(ui: &AppWindow) {
+        ui.set_update_busy(true);
+        ui.set_update_text("Kuruluyor…".into());
+        let weak = ui.as_weak();
+        std::thread::spawn(move || {
+            let code = uf_update::elevate::run_update_elevated();
+            let _ = weak.upgrade_in_event_loop(move |ui| match code {
+                Some(exit::INSTALLED | exit::RESTART_PENDING) => {
+                    show_update(&ui, &Ok(Check::RestartPending));
+                    toast(
+                        &ui,
+                        "Güncelleme kuruldu. Unfilter'ı yeniden başlatınca yeni sürüm açılır.",
+                    );
+                }
+                Some(exit::UP_TO_DATE) => show_update(&ui, &Ok(Check::UpToDate)),
+                Some(_) => {
+                    ui.set_update_busy(false);
+                    ui.set_update_text("Kurulamadı (imza veya ağ sorunu)".into());
+                    ui.set_update_action("Tekrar dene".into());
+                }
+                None => {
+                    ui.set_update_busy(false);
+                    ui.set_update_text("Yönetici izni verilmedi".into());
+                }
+            });
         });
     }
 
@@ -330,6 +404,16 @@ mod app {
         ui.on_exit_clicked(|| {
             let _ = slint::quit_event_loop();
         });
+        let w = ui.as_weak();
+        ui.on_update_clicked(move || {
+            let Some(ui) = w.upgrade() else { return };
+            if ui.get_update_primary() {
+                install_update(&ui);
+            } else {
+                check_updates(&ui, false);
+            }
+        });
+        check_updates(&ui, true);
 
         let _splash = start_splash(&ui);
         ui.run()?;
@@ -357,6 +441,8 @@ mod snapshot {
     //! main states with the software renderer into PNGs under
     //! `$UF_SNAPSHOT_DIR` (default: `%TEMP%\uf-ui-snapshots`) for visual review.
     use std::rc::Rc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
 
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     use slint::platform::{Platform, WindowAdapter};
@@ -366,11 +452,17 @@ mod snapshot {
     use crate::view::{Conn, Offline};
     use crate::{AppWindow, splash};
 
+    /// Fake clock: each shot advances it so property animations settle.
+    static CLOCK_MS: AtomicU64 = AtomicU64::new(0);
+
     struct TestPlatform(Rc<MinimalSoftwareWindow>);
 
     impl Platform for TestPlatform {
         fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, slint::PlatformError> {
             Ok(self.0.clone())
+        }
+        fn duration_since_start(&self) -> Duration {
+            Duration::from_millis(CLOCK_MS.load(Ordering::Relaxed))
         }
     }
 
@@ -436,18 +528,20 @@ mod snapshot {
         let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
         slint::platform::set_platform(Box::new(TestPlatform(window.clone()))).unwrap();
         let ui = AppWindow::new().unwrap();
-        window.set_size(slint::PhysicalSize::new(360, 620));
+        window.set_size(slint::PhysicalSize::new(520, 620));
         ui.show().unwrap();
         let dir = std::env::var_os("UF_SNAPSHOT_DIR")
             .map_or_else(|| std::env::temp_dir().join("uf-ui-snapshots"), Into::into);
         std::fs::create_dir_all(&dir).unwrap();
         let shot = |name: &str| {
-            let mut buf = vec![Rgb8Pixel::default(); 360 * 620];
+            let mut buf = vec![Rgb8Pixel::default(); 520 * 620];
+            CLOCK_MS.fetch_add(2000, Ordering::Relaxed);
+            slint::platform::update_timers_and_animations();
             window.request_redraw();
             window.draw_if_needed(|r| {
-                r.render(&mut buf, 360);
+                r.render(&mut buf, 520);
             });
-            png(&dir.join(format!("{name}.png")), 360, 620, &buf);
+            png(&dir.join(format!("{name}.png")), 520, 620, &buf);
         };
         for t in [0.0f32, 0.15, 0.4, 0.9, 1.5, 2.2, 2.6, 2.85] {
             ui.set_splash(super::app::splash_frame(&splash::frame(t)));
@@ -469,10 +563,25 @@ mod snapshot {
             super::app::apply_view(&ui, &conn);
             shot(name);
         }
-        ui.set_panel(2);
-        shot("panel-logs");
-        ui.set_panel(1);
-        shot("panel-settings");
+        ui.set_test_rows(slint::ModelRc::new(slint::VecModel::from(vec![
+            crate::TestRow {
+                label: "DNS".into(),
+                value: "çözüldü".into(),
+                ok: true,
+            },
+            crate::TestRow {
+                label: "TLS/SNI".into(),
+                value: "sıfırlandı".into(),
+                ok: false,
+            },
+        ])));
+        ui.set_update_text("Yeni sürüm hazır: 1.1.0".into());
+        ui.set_update_action("Güncelle".into());
+        ui.set_update_primary(true);
+        for (i, name) in [(1, "panel-sites"), (2, "panel-logs"), (3, "panel-settings")] {
+            ui.set_panel(i);
+            shot(name);
+        }
         println!("snapshots in {}", dir.display());
     }
 }
