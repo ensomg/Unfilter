@@ -4511,7 +4511,7 @@ dependencies = [
 
 [[package]]
 name = "uf-capture"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "uf-core",
  "windows-sys 0.59.0",
@@ -4519,7 +4519,7 @@ dependencies = [
 
 [[package]]
 name = "uf-core"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "criterion",
  "serde",
@@ -4528,7 +4528,7 @@ dependencies = [
 
 [[package]]
 name = "uf-dns"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "rustls",
  "serde",
@@ -4538,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "uf-fallback"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4547,7 +4547,7 @@ dependencies = [
 
 [[package]]
 name = "uf-ipc"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4556,7 +4556,7 @@ dependencies = [
 
 [[package]]
 name = "uf-probe"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4565,7 +4565,7 @@ dependencies = [
 
 [[package]]
 name = "uf-quic"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "ring",
  "uf-core",
@@ -4573,7 +4573,7 @@ dependencies = [
 
 [[package]]
 name = "uf-service"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "rustls",
  "serde",
@@ -4591,7 +4591,7 @@ dependencies = [
 
 [[package]]
 name = "uf-tray"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "uf-ipc",
  "windows-sys 0.59.0",
@@ -4599,7 +4599,7 @@ dependencies = [
 
 [[package]]
 name = "uf-ui"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "raw-window-handle",
  "slint",
@@ -4611,7 +4611,7 @@ dependencies = [
 
 [[package]]
 name = "uf-update"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "ring",
  "serde",
@@ -4621,7 +4621,7 @@ dependencies = [
 
 [[package]]
 name = "unfilter"
-version = "1.0.0"
+version = "1.1.0-beta.1"
 dependencies = [
  "embed-resource",
  "uf-capture",

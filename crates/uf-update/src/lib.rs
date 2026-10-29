@@ -46,30 +46,90 @@ pub mod exit {
     pub const RESTART_PENDING: u8 = 3;
 }
 
-/// `major.minor.patch`; pre-release and build suffixes are ignored.
+/// Pre-release stage; a release sorts after all of its pre-releases.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Version(pub u64, pub u64, pub u64);
+pub enum Stage {
+    /// `-alpha.N`
+    Alpha,
+    /// `-beta.N`
+    Beta,
+    /// `-rc.N`
+    Rc,
+    /// No suffix.
+    Release,
+}
+
+/// `major.minor.patch[-alpha.N|-beta.N|-rc.N]`; a `+build` suffix is ignored.
+/// Field order gives the ordering: `1.1.0-beta.1 < 1.1.0-rc.1 < 1.1.0`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Version {
+    /// Major.
+    pub major: u64,
+    /// Minor.
+    pub minor: u64,
+    /// Patch.
+    pub patch: u64,
+    /// Pre-release stage.
+    pub stage: Stage,
+    /// Pre-release number (0 for a release).
+    pub pre: u64,
+}
 
 impl Version {
-    /// Parses `1.2.3` or `v1.2.3` (with an optional `-pre`/`+build` suffix).
+    /// A release version.
+    pub const fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+            stage: Stage::Release,
+            pre: 0,
+        }
+    }
+
+    /// Parses `1.2.3`, `v1.2.3` or `1.2.3-beta.4`; other suffixes are rejected.
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim();
         let s = s.strip_prefix('v').unwrap_or(s);
-        let core = s.split(['-', '+']).next()?;
+        let s = s.split('+').next()?;
+        let (core, suffix) = match s.split_once('-') {
+            Some((c, p)) => (c, Some(p)),
+            None => (s, None),
+        };
         let mut it = core.split('.').map(|p| p.parse::<u64>().ok());
-        let v = Self(it.next()??, it.next()??, it.next()??);
-        it.next().is_none().then_some(v)
+        let mut v = Self::new(it.next()??, it.next()??, it.next()??);
+        if it.next().is_some() {
+            return None;
+        }
+        if let Some(p) = suffix {
+            let (label, n) = p.split_once('.')?;
+            v.stage = match label {
+                "alpha" => Stage::Alpha,
+                "beta" => Stage::Beta,
+                "rc" => Stage::Rc,
+                _ => return None,
+            };
+            v.pre = n.parse().ok()?;
+        }
+        Some(v)
     }
 
     /// The version of this build.
     pub fn current() -> Self {
-        Self::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Self(0, 0, 0))
+        Self::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Self::new(0, 0, 0))
     }
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}", self.0, self.1, self.2)
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
+        let label = match self.stage {
+            Stage::Alpha => "alpha",
+            Stage::Beta => "beta",
+            Stage::Rc => "rc",
+            Stage::Release => return Ok(()),
+        };
+        write!(f, "-{label}.{}", self.pre)
     }
 }
 
@@ -263,12 +323,22 @@ mod tests {
 
     #[test]
     fn versions_parse_and_order() {
-        assert_eq!(Version::parse("v1.2.3"), Some(Version(1, 2, 3)));
-        assert_eq!(Version::parse("1.10.0-rc.1"), Some(Version(1, 10, 0)));
+        assert_eq!(Version::parse("v1.2.3"), Some(Version::new(1, 2, 3)));
+        assert_eq!(Version::parse("1.2.3+build.7"), Some(Version::new(1, 2, 3)));
         assert_eq!(Version::parse("1.2"), None);
         assert_eq!(Version::parse("1.2.3.4"), None);
         assert_eq!(Version::parse("vX"), None);
-        assert!(Version(1, 10, 0) > Version(1, 9, 9));
+        assert_eq!(Version::parse("1.2.3-nightly"), None);
+        assert!(Version::new(1, 10, 0) > Version::new(1, 9, 9));
+        let beta = Version::parse("v1.1.0-beta.1").unwrap();
+        let rc = Version::parse("1.1.0-rc.2").unwrap();
+        assert_eq!(
+            (beta.to_string(), rc.to_string()),
+            ("1.1.0-beta.1".into(), "1.1.0-rc.2".into())
+        );
+        // a beta updates to its release, not the other way round
+        assert!(Version::new(1, 0, 0) < beta && beta < rc && rc < Version::new(1, 1, 0));
+        assert!(Version::parse("1.1.0-beta.2").unwrap() > beta);
         assert_eq!(Version::current().to_string(), env!("CARGO_PKG_VERSION"));
     }
 
@@ -292,7 +362,7 @@ mod tests {
     #[test]
     fn release_json_is_parsed() {
         let r = parse_release(release_json("v1.1.0", false, "github.com").as_bytes()).unwrap();
-        assert_eq!(r.version, Version(1, 1, 0));
+        assert_eq!(r.version, Version::new(1, 1, 0));
         assert!(r.exe_url.unwrap().ends_with("/v1.1.0/unfilter.exe"));
         assert!(r.sig_url.unwrap().ends_with("/v1.1.0/unfilter.exe.sig"));
     }
@@ -312,11 +382,11 @@ mod tests {
         let kp = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
         let pk = kp.public_key().as_ref();
         let exe = b"MZ fake exe";
-        let v = Version(1, 1, 0);
+        let v = Version::new(1, 1, 0);
         let sig = to_hex(kp.sign(&signed_message(v, exe)).as_ref());
         assert!(verify(v, exe, sig.as_bytes(), pk));
         // another version (rollback under a newer tag), other bytes, other key
-        assert!(!verify(Version(1, 2, 0), exe, sig.as_bytes(), pk));
+        assert!(!verify(Version::new(1, 2, 0), exe, sig.as_bytes(), pk));
         assert!(!verify(v, b"MZ evil", sig.as_bytes(), pk));
         assert!(!verify(v, exe, sig.as_bytes(), &[7; 32]));
         assert!(!verify(v, exe, b"zz", pk));
