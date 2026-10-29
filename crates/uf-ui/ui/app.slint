@@ -212,7 +212,6 @@ export component AppWindow inherits Window {
     in property <bool> go-outline: false;
     in property <bool> go-enabled: false;
     in property <bool> controls-enabled: false;
-    in-out property <bool> game-mode: false;
     in property <[LogLine]> logs: [];
     in property <[TestRow]> test-rows: [];
     in property <bool> test-busy: false;
@@ -227,7 +226,6 @@ export component AppWindow inherits Window {
     in-out property <int> panel: 0;
 
     callback go-clicked();
-    callback mode-selected(bool /* game */);
     callback repair-clicked();
     callback rescan-clicked();
     callback test-clicked(string);
@@ -292,6 +290,40 @@ export component AppWindow inherits Window {
             }
         }
 
+        // soft halo in the state colour behind the ring; breathes while scanning
+        Rectangle {
+            x: (root.width - 132px) / 2;
+            y: 84px;
+            width: 132px;
+            height: 132px;
+            border-radius: 66px;
+            background: Theme.bg;
+            drop-shadow-blur: 34px;
+            drop-shadow-color: root.visual == Visual.connected ? Theme.ok.with-alpha(0.38)
+                : root.visual == Visual.scanning ? Theme.warn.with-alpha(0.32)
+                : root.visual == Visual.fault ? Theme.bad.with-alpha(0.32)
+                : transparent;
+            animate drop-shadow-color { duration: 450ms; easing: ease-in-out; }
+            opacity: root.visual == Visual.scanning
+                ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1400) / 1400 * 180deg))
+                : 1.0;
+        }
+
+        // ripples spreading out from the ring while connected
+        for i in [0, 1]: Rectangle {
+            property <float> t: root.visual == Visual.connected
+                ? Math.mod(animation-tick() / 1ms + i * 1300, 2600) / 2600 : 0;
+            property <length> size: 132px + 70px * t;
+            visible: root.visual == Visual.connected;
+            x: (root.width - self.size) / 2;
+            y: 84px + (132px - self.size) / 2;
+            width: self.size;
+            height: self.size;
+            border-radius: self.size / 2;
+            border-width: 1.5px;
+            border-color: Theme.ok.with-alpha(0.45 * (1 - self.t));
+        }
+
         // status ring
         Rectangle {
             x: (root.width - 132px) / 2;
@@ -304,6 +336,7 @@ export component AppWindow inherits Window {
                 : root.visual == Visual.connected ? Theme.ok
                 : root.visual == Visual.fault ? Theme.bad
                 : Theme.ring;
+            background: Theme.bg;
             animate border-color { duration: 300ms; }
 
             // rotating 3/4 arc while scanning (only exists, and only animates, then)
@@ -339,18 +372,23 @@ export component AppWindow inherits Window {
                 stroke-w: 1.8px;
                 d: "M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3Z";
                 tint: root.visual == Visual.ready || root.visual == Visual.offline ? Theme.mut : root.state-color;
+                animate tint { duration: 350ms; }
                 opacity: root.visual == Visual.scanning
                     ? 0.55 + 0.45 * Math.abs(Math.sin(Math.mod(animation-tick() / 1ms, 1600) / 1600 * 180deg))
                     : 1.0;
             }
-            if root.visual == Visual.connected: Icon {
-                x: (parent.width - 44px) / 2;
-                y: (parent.height - 44px) / 2;
-                width: 44px;
-                height: 44px;
+            check := Icon {
+                property <bool> on: root.visual == Visual.connected;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: self.on ? 44px : 20px;
+                height: self.width;
                 stroke-w: 1.8px;
                 d: "m9 12 2 2 4-4";
                 tint: Theme.ok;
+                opacity: self.on ? 1 : 0;
+                animate width { duration: 420ms; easing: ease-out-back; }
+                animate opacity { duration: 260ms; }
             }
         }
 
@@ -364,6 +402,7 @@ export component AppWindow inherits Window {
             font-weight: 700;
             letter-spacing: 3.5px;
             color: root.state-color;
+            animate color { duration: 350ms; }
         }
         Text {
             x: 20px;
@@ -376,44 +415,10 @@ export component AppWindow inherits Window {
             color: Theme.mut;
         }
 
-        // mode switch
-        Rectangle {
-            x: 20px;
-            y: 328px;
-            width: root.width - 40px;
-            height: 40px;
-            border-radius: 8px;
-            border-width: 1px;
-            border-color: Theme.line;
-            background: Theme.bg2;
-            HorizontalLayout {
-                padding: 3px;
-                for game in [false, true]: Rectangle {
-                    border-radius: 6px;
-                    background: root.game-mode == game ? #262a31 : transparent;
-                    Text {
-                        text: game ? "Oyun Modu" : "Normal Mod";
-                        color: root.game-mode == game ? Theme.text
-                            : mode-ta.has-hover && root.controls-enabled ? Theme.text : Theme.mut;
-                    }
-                    mode-ta := TouchArea {
-                        enabled: root.controls-enabled;
-                        mouse-cursor: root.controls-enabled ? pointer : default;
-                        clicked => {
-                            if root.game-mode != game {
-                                root.game-mode = game;
-                                root.mode-selected(game);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // primary button
         go := Rectangle {
             x: 20px;
-            y: 380px;
+            y: 332px;
             width: root.width - 40px;
             height: 48px;
             border-radius: 8px;
@@ -422,6 +427,7 @@ export component AppWindow inherits Window {
                 : go-ta.has-hover ? #ffffff : #f1f2f4;
             border-width: root.go-outline ? 1px : 0px;
             border-color: go-ta.has-hover ? Theme.bad : Theme.line;
+            animate background, border-color { duration: 200ms; }
             Text {
                 text: root.go-label;
                 font-weight: 700;
@@ -500,10 +506,6 @@ export component AppWindow inherits Window {
                         enabled: root.controls-enabled;
                         clicked => { root.rescan-clicked(); }
                     }
-                }
-                SettingRow {
-                    title: "Mod";
-                    note: root.game-mode ? "Oyun Modu: Discord ve oyun UDP gecikmesi öncelikli" : "Normal Mod";
                 }
                 SettingRow {
                     title: "Sürüm";

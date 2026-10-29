@@ -3,3 +3,5 @@
 /dist
 *.pdb
 .vs/
+/assets/windivert/*.dll
+/assets/windivert/*.sys

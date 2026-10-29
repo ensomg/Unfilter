@@ -92,7 +92,7 @@ listeler.
 ## 7. Sorun giderme
 
 - **Simge yok / açılışta gelmiyor:** Görev Yöneticisi → Başlangıç'ta "Unfilter
-  Tray" etkin mi bakın; `Program Files\Unfilter\uf-tray.exe` elle çalıştırın.
+  Tray" etkin mi bakın; `Program Files\Unfilter\unfilter.exe --tray` elle çalıştırın.
 - **Durum FAULT:** **Onar**'a basın. Sürücü yüklenemiyorsa Secure Boot/sürücü
   imzası veya antivirüs engeli olabilir (bkz. [faq.md](faq.md)).
 - **Site hâlâ açılmıyor:** **Yeniden Tara**; **Loglar**'dan test edin. Engel

@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 $files = @()
 
-foreach ($exe in @('uf-service.exe', 'uf-tray.exe', 'uf-ui.exe')) {
+foreach ($exe in @('unfilter.exe')) {
     $path = Join-Path $Target $exe
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $files += Get-Item -LiteralPath $path

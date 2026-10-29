@@ -1,5 +1,6 @@
 // Generated icons: python -I assets/icons/gen_icons.py
-// Ids must match crates/uf-tray/src/menu.rs (mod icon).
+// Ids must match crates/uf-tray/src/menu.rs (mod icon); id 1 is the app icon
+// (Explorer/taskbar + WM_SETICON in uf-ui).
 1 ICON "../../assets/icons/unfilter.ico"
 101 ICON "../../assets/icons/tray-offline.ico"
 102 ICON "../../assets/icons/tray-ready.ico"

@@ -421,11 +421,13 @@ mod win {
     use super::{FrameReader, HandshakeError, client_handshake, write_frame};
     use crate::{ClientMessage, Request, ServerMessage};
 
-    /// ADR 005 DACL: protected (no inheritance); SYSTEM full control;
-    /// interactive users read + write **without** `FILE_CREATE_PIPE_INSTANCE`
-    /// (0x4), so a user process cannot create a rogue instance of the pipe.
+    /// ADR 005 DACL: protected (no inheritance); SYSTEM and (elevated)
+    /// Administrators full control — the latter so the single exe can host the
+    /// service as an elevated user without an installer; interactive users
+    /// read + write **without** `FILE_CREATE_PIPE_INSTANCE` (0x4), so a
+    /// non-elevated process cannot create a rogue instance of the pipe.
     /// `0x12019b` = `FILE_GENERIC_READ | FILE_GENERIC_WRITE & !FILE_APPEND_DATA`.
-    pub const SDDL_ADR005: &str = "D:P(A;;GA;;;SY)(A;;0x12019b;;;IU)";
+    pub const SDDL_ADR005: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;IU)";
 
     /// Access mask clients request; must be a subset of the IU grant above.
     const CLIENT_ACCESS: u32 = 0x0012_019b;

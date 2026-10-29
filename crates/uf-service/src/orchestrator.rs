@@ -111,7 +111,11 @@ impl Orchestrator {
                 self.mode = mode;
                 self.status_response_with_event()
             }
-            Request::Repair => (ResponsePayload::Ok, Vec::new()),
+            // Repair re-runs the scan from scratch (the runtime restarts capture).
+            Request::Repair => {
+                self.begin_scan();
+                self.status_response_with_event()
+            }
             Request::GetStatus => (
                 ResponsePayload::Status {
                     status: self.status(),
@@ -131,12 +135,56 @@ impl Orchestrator {
     /// The next candidate the scan should try, or `None` if the ladder is
     /// exhausted. Advances the scan position.
     pub fn next_candidate(&mut self) -> Option<Candidate> {
+        self.next_candidate_indexed().map(|(_, c)| c)
+    }
+
+    /// Like [`Self::next_candidate`], but also returns the candidate's ladder
+    /// index (what [`Self::record_probe`] takes).
+    pub fn next_candidate_indexed(&mut self) -> Option<(usize, Candidate)> {
         if self.state != ConnState::Scanning {
             return None;
         }
         let &idx = self.try_order.get(self.try_pos)?;
         self.try_pos += 1;
-        Some(self.ladder[idx].clone())
+        Some((idx, self.ladder[idx].clone()))
+    }
+
+    /// The current connection state.
+    pub fn state(&self) -> ConnState {
+        self.state
+    }
+
+    /// The strategy the engine should run while connected, if any.
+    pub fn active_spec(&self) -> Option<uf_core::strategy::StrategySpec> {
+        self.active.map(|i| self.ladder[i].spec.clone())
+    }
+
+    /// End a scan where no candidate passed every target by settling on the
+    /// best partial one (`ladder_index`), rather than faulting. No-op unless
+    /// scanning. Returns events to push.
+    pub fn accept_partial(&mut self, ladder_index: usize, latency_us: u32) -> Vec<Event> {
+        if self.state != ConnState::Scanning || ladder_index >= self.ladder.len() {
+            return Vec::new();
+        }
+        self.activate(ladder_index, latency_us);
+        self.persist_scores();
+        vec![Event::Status {
+            status: self.status(),
+        }]
+    }
+
+    /// The runtime could not start (no driver / not elevated): show a fault so
+    /// the user sees it and can hit Repair. Returns events to push.
+    pub fn fault(&mut self) -> Vec<Event> {
+        if self.state == ConnState::Fault {
+            return Vec::new();
+        }
+        self.state = ConnState::Fault;
+        self.active = None;
+        self.added_latency_us = 0;
+        vec![Event::Status {
+            status: self.status(),
+        }]
     }
 
     /// Record a probe result for `ladder_index`. When a candidate succeeds it
@@ -428,10 +476,34 @@ mod tests {
     }
 
     #[test]
+    fn partial_accept_connects_and_repair_rescans() {
+        let mut o = orch();
+        o.handle(Request::Connect);
+        let (idx, _) = o.next_candidate_indexed().unwrap();
+        o.record_probe(idx, false, 0);
+        let ev = o.accept_partial(idx, 900);
+        assert_eq!(ev.len(), 1);
+        assert_eq!(o.state(), ConnState::Connected);
+        assert!(o.active_spec().is_some());
+        o.handle(Request::Repair);
+        assert_eq!(o.state(), ConnState::Scanning);
+        assert!(o.active_spec().is_none());
+    }
+
+    #[test]
+    fn fault_clears_active() {
+        let mut o = orch();
+        o.handle(Request::Connect);
+        assert_eq!(o.fault().len(), 1);
+        assert_eq!(o.state(), ConnState::Fault);
+        assert!(o.fault().is_empty());
+    }
+
+    #[test]
     fn set_mode_updates_status() {
         let mut o = orch();
-        o.handle(Request::SetMode { mode: Mode::Game });
-        assert_eq!(o.status().mode, Mode::Game);
+        o.handle(Request::SetMode { mode: Mode::Normal });
+        assert_eq!(o.status().mode, Mode::Normal);
     }
 
     #[test]

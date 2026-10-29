@@ -4,7 +4,9 @@
 //! threads); every service message is marshalled to the UI thread with
 //! `upgrade_in_event_loop`. Nothing polls: the only timers are the ~3 s
 //! opening animation (stopped when done) and the one-shot toast timer.
-#![cfg_attr(not(test), windows_subsystem = "windows")]
+//!
+//! This is a library: the single `unfilter` binary runs it in `--ui` mode. The
+//! `windows` subsystem is set by that binary, not here.
 
 mod splash;
 mod view;
@@ -27,7 +29,7 @@ mod app {
 
     use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
     use uf_ipc::pipe::{LinkEvent, OfflineReason, ServiceLink};
-    use uf_ipc::{Event, Mode, PIPE_NAME, Request, ResponsePayload, ServerMessage};
+    use uf_ipc::{Event, PIPE_NAME, Request, ResponsePayload, ServerMessage};
 
     use crate::view::{self, Conn, Offline};
     use crate::{AppWindow, LogLine, SplashFrame, TestRow, Visual, splash, win};
@@ -95,7 +97,6 @@ mod app {
         ui.set_go_outline(vm.button_outline);
         ui.set_go_enabled(vm.button_enabled);
         ui.set_controls_enabled(vm.controls_enabled);
-        ui.set_game_mode(vm.game_mode);
         let strategy = match conn {
             Conn::Online(st) => st.strategy.as_deref().map(|s| format!("Aktif: {s}")),
             _ => None,
@@ -217,7 +218,7 @@ mod app {
                         if matches!(req, Some(Request::TestSite { .. })) {
                             ui.set_test_busy(false);
                         }
-                        // undo the optimistic mode switch
+                        // re-sync the view with the last known state
                         let conn = with_state(|s| s.conn.clone());
                         apply_view(ui, &conn);
                     }
@@ -302,12 +303,6 @@ mod app {
             }
         });
         let (w, l) = (ui.as_weak(), Rc::clone(&link));
-        ui.on_mode_selected(move |game| {
-            let Some(ui) = w.upgrade() else { return };
-            let mode = if game { Mode::Game } else { Mode::Normal };
-            send(&ui, &l, Request::SetMode { mode });
-        });
-        let (w, l) = (ui.as_weak(), Rc::clone(&link));
         ui.on_repair_clicked(move || {
             if let Some(ui) = w.upgrade() {
                 send(&ui, &l, Request::Repair);
@@ -343,14 +338,17 @@ mod app {
     }
 }
 
+/// Run the settings/status window. Returns when the window is closed.
 #[cfg(windows)]
-fn main() -> Result<(), slint::PlatformError> {
+pub fn run() -> Result<(), slint::PlatformError> {
     app::run()
 }
 
+/// Non-Windows stub: the UI only runs on Windows.
 #[cfg(not(windows))]
-fn main() {
+pub fn run() -> Result<(), slint::PlatformError> {
     eprintln!("uf-ui only runs on Windows");
+    Ok(())
 }
 
 #[cfg(all(test, windows))]

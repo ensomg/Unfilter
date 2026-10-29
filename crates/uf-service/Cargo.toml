@@ -7,12 +7,6 @@ license.workspace = true
 publish.workspace = true
 description = "Privileged Windows service hosting the engine"
 
-[features]
-# The live DoT transport (rustls + ring). On by default for the real service;
-# turn it off to build/test the control plane without the TLS stack.
-default = ["live-tls"]
-live-tls = ["dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
-
 [dependencies]
 uf-core = { workspace = true }
 uf-capture = { workspace = true }
@@ -23,9 +17,8 @@ uf-ipc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = "0.8.19"
-rustls = { workspace = true, optional = true }
-rustls-pki-types = { version = "1.11", optional = true }
-webpki-roots = { version = "1.0", optional = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [

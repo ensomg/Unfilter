@@ -116,7 +116,8 @@ fn remove_icon(app: &App) {
     unsafe { Shell_NotifyIconW(NIM_DELETE, &nid) };
 }
 
-/// Brings an open uf-ui window forward, or starts `uf-ui.exe` next to us.
+/// Brings an open settings window forward, or launches one by re-executing our
+/// own binary in `--ui` mode (single-exe: there is no separate `uf-ui.exe`).
 fn open_ui() {
     // winit's default window class + our window title.
     let (class, title) = (wide("Window Class"), wide("Unfilter"));
@@ -133,7 +134,7 @@ fn open_ui() {
         return;
     }
     if let Ok(exe) = std::env::current_exe() {
-        let _ = std::process::Command::new(exe.with_file_name("uf-ui.exe")).spawn();
+        let _ = std::process::Command::new(exe).arg("--ui").spawn();
     }
 }
 
